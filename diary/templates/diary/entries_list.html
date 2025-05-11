@@ -1,0 +1,478 @@
+{% extends "diary/layout.html" %}
+{% block title %}My Entries{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="h5 mb-4">
+        {% if view_type == 'archive' %}
+            Archive
+        {% elif view_type == 'trash' %}
+            Trash
+        {% else %}
+            My Entries
+        {% endif %}
+
+    </h1>
+    <!-- Search and Sort Controls -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <button class="btn btn-link w-100 text-start d-flex justify-content-between align-items-center" 
+                    type="button" 
+                    data-bs-toggle="collapse" 
+                    data-bs-target="#searchControls" 
+                    aria-expanded="false"
+                    aria-controls="searchControls">
+                <span>Search & Filters</span>
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+        <div id="searchControls" class="collapse">
+            <div class="card-body">
+                <form method="GET" class="row g-3 align-items-end">
+                    
+                    {% if view_type %}
+                    <input type="hidden" name="view_type" value="{{ view_type }}">
+                    {% endif %}
+                    
+                    <!-- Search -->
+                    <div class="col-md-4">
+                        <label for="search" class="form-label">Search entries</label>
+                        <input type="text" class="form-control" id="search" name="search" 
+                               value="{{ search_query }}" 
+                               placeholder="Search in content...">
+                    </div>
+                    
+                    <!-- Date Range -->
+                    <div class="col-md-3">
+                        <label for="date_from" class="form-label">From</label>
+                        <input type="date" class="form-control" id="date_from" name="date_from"
+                               value="{{ date_from|default:'' }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="date_to" class="form-label">To</label>
+                        <input type="date" class="form-control" id="date_to" name="date_to"
+                               value="{{ date_to|default:'' }}">
+                    </div>
+
+                    <!-- Sort -->
+                    <div class="col-md-2">
+                        <label for="sort" class="form-label">Sort by</label>
+                        <select class="form-select" id="sort" name="sort">
+                            <option value="-created_at" {% if sort == '-created_at' %}selected{% endif %}>Newest first</option>
+                            <option value="created_at" {% if sort == 'created_at' %}selected{% endif %}>Oldest first</option>
+                        </select>
+                    </div>
+
+                    <!-- Filter Controls -->
+                    <div class="col-12">
+                        <div class="d-flex gap-2 flex-wrap">
+                            {% for tag in all_tags %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="tags" 
+                                           value="{{ tag.id }}" id="tag_{{ tag.id }}"
+                                           {% if tag.id|stringformat:"i" in selected_tags %}checked{% endif %}>
+                                    <label class="form-check-label" for="tag_{{ tag.id }}">
+                                        {{ tag.name }}
+                                    </label>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Submit -->
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">Apply Filters</button>
+                        <a href="?{% if view_type %}view_type={{ view_type }}{% endif %}" 
+                           class="btn btn-outline-secondary" 
+                           data-keep-open="true">Clear</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Entries List -->
+    {% if entries %}
+        {% for entry in entries %}
+            <a href="{% url 'entry-detail' pk=entry.pk %}" class="text-decoration-none">
+                <div class="card mb-3 entry-card">
+                    <div class="card-body" onclick="handleCardClick(event)">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h5 class="card-title">{{ entry.created_at|date:"F j, Y" }}</h5>
+                            <div>
+                                {% if entry.emoji_of_day %}
+                                    <span class="fs-4">{{ entry.emoji_of_day }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="card-text mb-3">
+                            {{ entry.content|safe|truncatewords_html:50 }}
+                            {% if entry.content|length > 300 %}
+                                <span class="text-primary">Read more...</span>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="tags">
+                                {% if entry.tags.all %}
+                                    {% for tag in entry.tags.all %}
+                                        <span class="badge bg-tag">{{ tag.name }}</span>
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
+                            
+                            <div class="btn-group" role="group" onclick="event.preventDefault(); event.stopPropagation()">
+                                {% if view_type == 'trash' %}
+                                    <button class="btn btn-outline-success" onclick="restoreEntry({{ entry.pk }})">
+                                        <i class="fas fa-undo"></i> Restore
+                                    </button>
+                                {% elif view_type == 'archive' %}
+                                    <button class="btn btn-outline-success" onclick="unarchiveEntry({{ entry.pk }})">
+                                        <i class="fas fa-box-open"></i> Unarchive
+                                    </button>
+                                {% else %}
+                                    <a href="{% url 'entry-edit' pk=entry.pk %}" class="btn btn-outline-primary" onclick="event.preventDefault(); event.stopPropagation(); window.location.href=this.href;">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </a>
+                                    <button class="btn btn-outline-secondary" onclick="archiveEntry({{ entry.pk }})">
+                                        <i class="fas fa-archive"></i> Archive
+                                    </button>
+                                    <button class="btn btn-outline-danger" onclick="trashEntry({{ entry.pk }})">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        {% endfor %}
+
+        <!-- Pagination -->
+        {% if entries.has_other_pages %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if entries.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ entries.previous_page_number }}{% if view_type %}&view_type={{ view_type }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% for tag in selected_tags %}&tags={{ tag }}{% endfor %}">Previous</a>
+                        </li>
+                    {% endif %}
+                    {% for num in entries.paginator.page_range %}
+                        <li class="page-item {% if entries.number == num %}active{% endif %}">
+                            <a class="page-link" href="?page={{ num }}{% if view_type %}&view_type={{ view_type }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% for tag in request.GET.tags %}&tags={{ tag }}{% endfor %}">{{ num }}</a>
+                        </li>
+                    {% endfor %}
+                    {% if entries.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ entries.next_page_number }}{% if view_type %}&view_type={{ view_type }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% for tag in request.GET.tags %}&tags={{ tag }}{% endfor %}">Next</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        {% endif %}
+    {% else %}
+        <div class="text-center py-5">
+            <h4 class="text-muted">No entries found</h4>
+            <a href="{% url 'entry-create' %}" class="btn btn-primary mt-3">Create New Entry</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s ease;
+    }
+
+    .card-header {
+        background: transparent;
+        border-bottom: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+        padding: 1rem;
+    }
+
+    .card-body {
+        padding: 1.25rem;
+    }
+
+    /* Search Controls */
+    .btn-link {
+        text-decoration: none;
+        color: var(--text-color);
+        font-weight: 500;
+        padding: 0.5rem 0;
+    }
+
+    .btn-link:hover {
+        color: var(--primary);
+    }
+
+    .btn-link i.fa-chevron-right {
+        transition: transform 0.3s ease;
+        opacity: 0.7;
+    }
+
+    .btn-link[aria-expanded="true"] i.fa-chevron-right {
+        transform: rotate(90deg);
+        opacity: 1;
+    }
+
+    /* Form Controls */
+    /*
+    .form-control, .form-select {
+        border-radius: 8px;
+        border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
+        padding: 0.625rem 1rem;
+        transition: all 0.2s ease;
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.1);
+    }
+
+    .form-label {
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+        color: var(--text-muted);
+    }
+
+    /* Entry Cards */
+    .entry-card {
+        border-radius: 12px;
+        overflow: hidden;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .entry-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    }
+
+    /* Tags */
+    .badge {
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+        font-weight: 500;
+        font-size: 0.8125rem;
+    }
+
+
+
+    /* Pagination */
+    .pagination {
+        gap: 0.25rem;
+    }
+
+    .page-link {
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        color: var(--text-color);
+    }
+
+    .page-item.active .page-link {
+        background-color: var(--primary);
+        font-weight: 500;
+    }
+
+    /* Animations */
+    .collapse {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Dark Mode Adjustments */
+    [data-bs-theme="dark"] .card {
+        background-color: var(--bg-card);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+    }
+/*
+    [data-bs-theme="dark"] .form-control,
+    [data-bs-theme="dark"] .form-select {
+        background-color: var(--bg-input);
+        border-color: var(--border-color);
+    }
+
+    /* Custom Properties */
+    :root {
+        --primary-rgb: 13, 110, 253;
+        --border-color: rgba(0, 0, 0, 0.1);
+        --bg-card: var(--bs-body-bg);
+        --bg-input: var(--bs-body-bg);
+    }
+
+    [data-bs-theme="dark"] {
+        --border-color: rgba(255, 255, 255, 0.1);
+        --bg-card: rgba(255, 255, 255, 0.075);
+        --bg-input: rgba(255, 255, 255, 0.05);
+    }
+
+    
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function archiveEntry(entryId) {
+        if (confirm('Are you sure you want to archive this entry?')) {
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            fetch(`/entry/${entryId}/archive/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    window.location.href = '{% url "entries-list" %}';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to archive entry. Please try again.');
+            });
+        }
+    }
+    
+    function trashEntry(entryId) {
+        if (confirm('Are you sure you want to move this entry to trash?')) {
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            fetch(`/entry/${entryId}/trash/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    window.location.href = '{% url "entries-list" %}';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to delete entry. Please try again.');
+            });
+        }
+    }
+
+    function restoreEntry(entryId) {
+        if (confirm('Are you sure you want to restore this entry?')) {
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            fetch(`/entry/${entryId}/restore/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    window.location.href = '{% url "entries-list" %}';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to restore entry. Please try again.');
+            });
+        }
+    }
+
+    function unarchiveEntry(entryId) {
+        if (confirm('Are you sure you want to unarchive this entry?')) {
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            fetch(`/entry/${entryId}/unarchive/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    window.location.href = '{% url "entries-list" %}';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to unarchive entry. Please try again.');
+            });
+        }
+    }
+
+    function handleCardClick(event) {
+        // Prevent click if the target is a button or inside the button group
+        if (event.target.closest('.btn-group')) {
+            event.preventDefault();
+            return;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Show search controls if there are any active filters
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.toString()) {
+            showSearchControls();
+        }
+
+        // Add click handler for Clear button
+        document.querySelector('a[data-keep-open="true"]').addEventListener('click', function(e) {
+            // Store the current state
+            const searchControls = document.getElementById('searchControls');
+            const isExpanded = searchControls.classList.contains('show');
+            
+            // If the filter was expanded, re-expand it after page reload
+            if (isExpanded) {
+                sessionStorage.setItem('keepFilterOpen', 'true');
+            }
+        });
+
+        // Check if we should re-expand the filter
+        if (sessionStorage.getItem('keepFilterOpen')) {
+            showSearchControls();
+            sessionStorage.removeItem('keepFilterOpen');
+        }
+    });
+
+    // Helper function to show search controls
+    function showSearchControls() {
+        const searchControls = document.getElementById('searchControls');
+        const toggleButton = searchControls.previousElementSibling.querySelector('button');
+        searchControls.classList.add('show');
+        toggleButton.setAttribute('aria-expanded', 'true');
+    }
+</script>
+{% endblock %}

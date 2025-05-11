@@ -1,0 +1,386 @@
+{% extends "diary/layout.html" %}
+{% block title %}Write Entry{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+
+<style>
+    /* Add to your existing styles */
+    .word-count {
+        color: var(--text-color);
+        opacity: 0.7;
+    }
+
+    #autosave-status {
+        color: #28a745;
+    }
+
+    .btn-outline-secondary {
+        color: var(--text-color);
+        border-color: var(--card-border);
+    }
+
+    .btn-outline-secondary:hover {
+        background-color: var(--tag-bg);
+        border-color: var(--card-border);
+        color: var(--text-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <form id="entry-form" method="POST">
+        {% csrf_token %}
+        
+        <!-- Date Picker -->
+        <div class="mb-4 d-flex justify-content-between align-items-center">
+            <input type="date" class="form-control w-auto" 
+                   value="{{ entry.created_at|date:'Y-m-d' }}" name="entry_date">
+            <div>
+                <span class="word-count">0 words</span>
+                <span id="autosave-status"></span>
+            </div>
+        </div>
+
+        <!-- Emoji Picker -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h6>How are you feeling?</h6>
+                <div class="emoji-picker-container">
+                    <div class="d-flex gap-3 flex-wrap emoji-container">
+                        {% for emoji in emoji_suggestions %}
+                            <span class="emoji-option fs-4 {% if today_mood and emoji == today_mood.mood %}selected{% endif %}" 
+                                  role="button" 
+                                  data-emoji="{{ emoji }}">{{ emoji }}</span>
+                        {% endfor %}
+                    </div>
+                    <input type="hidden" name="emoji" id="selected-emoji" 
+                           value="{{ today_mood.mood|default:'' }}">
+                </div>
+            </div>
+        </div>
+
+        <!-- Rich Text Editor -->
+        <div id="editor">{{ entry.content|safe }}</div>
+        <input type="hidden" name="content" id="hidden-content">
+
+        <!-- Tags Section -->
+        <div class="card mt-4">
+            <div class="card-body">
+                <h6>Tags</h6>
+                <div class="mb-3">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="new-tag-input" 
+                               placeholder="Add new tag">
+                        <button class="btn btn-outline-primary" type="button" 
+                                id="add-tag-btn">Add</button>
+                    </div>
+                </div>
+                <!-- Available Tags -->
+                <div class="tag-container" id="tag-container">
+                    {% for tag in user_tags %}
+                        <div class="tag-item" data-tag-id="{{ tag.id }}">
+                            <span class="tag" data-tag-id="{{ tag.id }}" role="button">
+                                {{ tag.name }}
+                            </span>
+                        </div>
+                    {% endfor %}
+                </div>
+                <input type="hidden" name="tags" id="selected-tags" value="">
+                <input type="hidden" name="new_tags" id="new-tags" value="">
+            </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary">Save Entry</button>
+        </div>
+    </form>
+</div>
+
+{% endblock %}
+
+
+{% block extra_scripts %}
+<script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+<script>
+    const quill = new Quill('#editor', {
+        theme: 'snow',
+        modules: {
+            toolbar: [
+                ['bold', 'italic', 'underline'],
+                [{ 'header': [1, 2, false] }],
+                ['blockquote', 'code-block'],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                ['clean']
+            ]
+        }
+    });
+
+    // Word count
+    function updateWordCount() {
+        const text = quill.getText();
+        const words = text.trim().split(/\s+/).length;
+        document.querySelector('.word-count').textContent = `${words} words`;
+    }
+
+    // Autosave
+    let autosaveTimeout;
+    let lastSavedContent = '';
+
+    function autoSave() {
+        clearTimeout(autosaveTimeout);
+        autosaveTimeout = setTimeout(() => {
+            const content = quill.root.innerHTML;
+            
+            // Only save if content has changed
+            if (content !== lastSavedContent) {
+                fetch('{% url "entry-autosave" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify({
+                        content: content,
+                        entry_id: '{{ entry.id|default:"" }}',
+                        emoji: document.getElementById('selected-emoji').value,
+                        tags: document.getElementById('selected-tags').value
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        lastSavedContent = content;
+                        const status = document.getElementById('autosave-status');
+                        status.textContent = 'Saved';
+                        setTimeout(() => status.textContent = '', 2000);
+                    }
+                });
+            }
+        }, 1000);
+    }
+
+    // Event listeners
+    quill.on('text-change', () => {
+        updateWordCount();
+        autoSave();
+        document.getElementById('hidden-content').value = quill.root.innerHTML;
+    });
+
+    // Form submission
+    document.getElementById('entry-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        // Perform final autosave
+        clearTimeout(autosaveTimeout);
+        const content = quill.root.innerHTML;
+        document.getElementById('hidden-content').value = content;
+        
+        // Wait for final autosave to complete
+        await fetch('{% url "entry-autosave" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                content: content,
+                entry_id: '{{ entry.id|default:"" }}',
+                emoji: document.getElementById('selected-emoji').value,
+                tags: document.getElementById('selected-tags').value
+            })
+        });
+        
+        // Submit the form
+        e.target.submit();
+    });
+
+    // Initialize
+    updateWordCount();
+
+    // Tag management
+    const tagInput = document.getElementById('new-tag-input');
+    const addTagBtn = document.getElementById('add-tag-btn');
+
+    function addNewTag() {
+        const tagName = tagInput.value.trim();
+        
+        if (!tagName) return;
+        
+        fetch('{% url "tag-create" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `name=${encodeURIComponent(tagName)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const tagContainer = document.getElementById('tag-container');
+                const tagItem = document.createElement('div');
+                tagItem.className = 'tag-item';
+                tagItem.innerHTML = `
+                    <span class="tag selected" data-tag-id="${data.tag.id}" role="button">
+                        ${data.tag.name}
+                    </span>
+                `;
+                tagContainer.appendChild(tagItem);
+                tagInput.value = '';
+                setupTagListeners();
+                // Update selected tags to include the new tag
+                updateSelectedTags();
+            }
+        });
+    }
+
+    // Add tag on enter key press
+    tagInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault(); // Prevent form submission
+            addNewTag();
+        }
+    });
+
+    // Add tag on button click 
+    addTagBtn.addEventListener('click', addNewTag);
+
+    // Prevent form submission on enter
+    document.getElementById('entry-form').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+            e.preventDefault();
+        }
+    });
+
+    function setupTagListeners() {
+        // Tag selection
+        document.querySelectorAll('.tag').forEach(tag => {
+            // Remove any existing click handlers
+            tag.removeEventListener('click', handleTagClick);
+            // Add new click handler
+            tag.addEventListener('click', handleTagClick);
+        });
+    }
+
+    function handleTagClick(event) {
+        const tag = event.currentTarget;
+        tag.classList.toggle('selected');
+        updateSelectedTags();
+    }
+
+    function updateSelectedTags() {
+        const selectedTags = Array.from(document.querySelectorAll('.tag.selected'))
+            .map(t => t.dataset.tagId);
+        document.getElementById('selected-tags').value = selectedTags.join(',');
+    }
+
+    // Call setupTagListeners on page load
+    setupTagListeners();
+
+    // Emoji management
+    const emojiPicker = document.querySelector('emoji-picker');
+    const addEmojiButton = document.getElementById('add-emoji-button');
+    const selectedEmojiInput = document.getElementById('selected-emoji');
+    const emojiContainer = document.querySelector('.emoji-container');
+
+    // Initialize selected emojis set with preselected mood
+    const selectedEmojis = new Set();
+    
+    // Add preselected mood if it exists
+    if (selectedEmojiInput.value) {
+        selectedEmojis.add(selectedEmojiInput.value);
+    }
+
+    // Handle emoji selection
+    document.querySelectorAll('.emoji-option').forEach(emoji => {
+        emoji.addEventListener('click', () => {
+            const emojiValue = emoji.dataset.emoji;
+            
+            // Remove selected class from all emojis
+            document.querySelectorAll('.emoji-option').forEach(e => {
+                e.classList.remove('selected');
+            });
+            
+            // Clear selected emojis set
+            selectedEmojis.clear();
+            
+            // If clicking a different emoji than currently selected
+            if (selectedEmojiInput.value !== emojiValue) {
+                selectedEmojis.add(emojiValue);
+                emoji.classList.add('selected');
+                selectedEmojiInput.value = emojiValue;
+            } else {
+                // If clicking the same emoji, deselect it
+                selectedEmojiInput.value = '';
+            }
+        });
+    });
+
+    // Initialize existing emojis
+    function initializeExistingEmojis() {
+        const savedEmojis = selectedEmojiInput.value.split('');
+        const existingOptions = new Set(
+            Array.from(document.querySelectorAll('.emoji-option'))
+                .map(opt => opt.dataset.emoji)
+        );
+        
+        // Add custom emojis that were previously selected
+        savedEmojis.forEach(emoji => {
+            if (!existingOptions.has(emoji)) {
+                const newOption = createEmojiOption(emoji, true);
+                emojiContainer.insertBefore(newOption, addEmojiButton);
+            }
+        });
+    }
+
+    // Handle emoji option clicks
+    document.querySelectorAll('.emoji-option').forEach(emoji => {
+        emoji.addEventListener('click', () => {
+            const emojiValue = emoji.dataset.emoji;
+            if (selectedEmojis.has(emojiValue)) {
+                selectedEmojis.delete(emojiValue);
+                emoji.classList.remove('selected');
+            } else {
+                selectedEmojis.add(emojiValue);
+                emoji.classList.add('selected');
+            }
+            updateSelectedEmojis();
+        });
+    });
+
+    // Show/hide emoji picker
+    addEmojiButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        const isVisible = emojiPicker.style.display === 'block';
+        emojiPicker.style.display = isVisible ? 'none' : 'block';
+    });
+
+    // Hide picker when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!emojiPicker.contains(e.target) && !addEmojiButton.contains(e.target)) {
+            emojiPicker.style.display = 'none';
+        }
+    });
+
+    // Handle emoji selection from picker
+    emojiPicker.addEventListener('emoji-click', event => {
+        const emoji = event.detail.unicode;
+        const newEmojiOption = createEmojiOption(emoji, true);
+        emojiContainer.insertBefore(newEmojiOption, addEmojiButton);
+        selectedEmojis.add(emoji);
+        updateSelectedEmojis();
+        emojiPicker.style.display = 'none';
+    });
+
+    // Support dark mode
+    if (document.body.classList.contains('dark-mode')) {
+        emojiPicker.setAttribute('theme', 'dark');
+    }
+
+    // Initialize custom emojis on page load
+    initializeExistingEmojis();
+</script>
+{% endblock %}

@@ -1,0 +1,42 @@
+# Core Dependencies
+Django==5.0.1
+djangorestframework==3.14.0
+
+# Rich Text & HTML Processing
+bleach==6.1.0
+html5lib==1.1
+
+# Database Support
+psycopg2-binary==2.9.9  # PostgreSQL adapter
+
+# Date/Time Handling
+python-dateutil==2.8.2
+
+# Development & Testing
+django-debug-toolbar==4.2.0
+pytest==7.4.3
+pytest-django==4.7.0
+
+# Security
+django-cors-headers==4.3.1
+django-csp==3.7
+
+# Frontend Integration
+django-webpack-loader==2.0.1
+
+# Performance & Caching
+django-redis==5.4.0
+redis==5.0.1
+
+# Task Queue (for background autosave processing)
+celery==5.3.6
+
+# API Documentation
+drf-yasg==1.21.7
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# Production Server
+gunicorn==21.2.0
+whitenoise==6.6.0  # Static file serving

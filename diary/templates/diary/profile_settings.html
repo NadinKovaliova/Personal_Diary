@@ -1,0 +1,270 @@
+{% extends "diary/layout.html" %}
+{% load crispy_forms_tags %}
+{% block title %}Settings{% endblock %}
+
+{% block extra_head %}
+<style>
+    .list-group-item {
+        border: none;
+        border-radius: 6px !important;
+        margin-bottom: 0.25rem;
+        transition: all 0.2s ease;
+        color: var(--text-color);
+        background-color: var(--card-bg);
+    }
+
+    .list-group-item.active {
+        background-color: var(--tag-selected-bg);
+        color: white;
+    }
+
+    .list-group-item:not(.active):hover {
+        background-color: var(--tag-bg);
+        transform: translateX(5px);
+    }
+
+    .dark-mode .list-group-item {
+        color: var(--text-color);
+        background-color: var(--card-bg);
+    }
+
+    .dark-mode .list-group-item:not(.active):hover {
+        background-color: var(--tag-bg);
+        color: var(--text-color);
+    }
+
+    .dark-mode .list-group-item.active {
+        background-color: var(--tag-selected-bg);
+        color: white;
+    }
+
+    #mainTitle {
+        position: relative;
+        padding-bottom: 0.5rem;
+        margin-bottom: 2rem;
+        transition: all 0.3s ease;
+        color: var(--text-color);
+    }
+
+    #mainTitle::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 50px;
+        height: 2px;
+        background-color: var(--tag-selected-bg);
+        transition: width 0.3s ease;
+    }
+
+    .section-title {
+        position: relative;
+        transition: color 0.3s ease;
+        color: var(--text-color);
+    }
+
+    .section-title.active {
+        color: var(--tag-selected-bg);
+    }
+
+    .card:has(.section-title.active) {
+        border-color: var(--tag-selected-bg);
+    }
+
+    .dark-mode .card {
+        background-color: var(--card-bg);
+        border-color: var(--card-border);
+    }
+
+    .dark-mode .section-title.active {
+        color: var(--tag-selected-bg);
+    }
+
+    .dark-mode .card:has(.section-title.active) {
+        border-color: var(--tag-selected-bg);
+    }
+
+    /* Icon colors */
+    .list-group-item i {
+        color: var(--text-color);
+        transition: color 0.3s ease;
+    }
+
+    .list-group-item.active i,
+    .dark-mode .list-group-item.active i {
+        color: white;
+    }
+
+    .dark-mode .list-group-item i {
+        color: var(--text-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <!-- Settings Navigation -->
+        <div class="col-md-3">
+            <div class="list-group mb-4 sticky-top" style="top: 1rem;">
+                <a href="#profile" class="list-group-item list-group-item-action" 
+                   onclick="updateTitle('Profile Settings')">
+                    <i class="fas fa-user me-2"></i>Profile
+                </a>
+                <a href="#appearance" class="list-group-item list-group-item-action" 
+                   onclick="updateTitle('Appearance Settings')">
+                    <i class="fas fa-palette me-2"></i>Appearance
+                </a>
+                <a href="#security" class="list-group-item list-group-item-action" 
+                   onclick="updateTitle('Security Settings')">
+                    <i class="fas fa-shield-alt me-2"></i>Security
+                </a>
+                <a href="#data" class="list-group-item list-group-item-action" 
+                   onclick="updateTitle('Data Management')">
+                    <i class="fas fa-database me-2"></i>Data Management
+                </a>
+            </div>
+        </div>
+        
+        <div class="col-md-9">
+            <h3 id="mainTitle" class="mb-4">Profile Settings</h3>
+           
+            <div class="content">
+                <form method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <!-- Profile Section -->
+                    <div id="profile" class="mb-4">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="section-title card-title mb-4">Profile Settings</h5>
+                                
+                                <!-- Email -->
+                                {{ form.email|as_crispy_field }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Appearance Section -->
+                    <div id="appearance" class="mb-4">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="section-title card-title mb-4">Appearance Settings</h5>
+                                {{ form.dark_mode|as_crispy_field }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Security Section -->
+                    <div id="security" class="mb-4">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="section-title card-title mb-4">Security Settings</h5>
+                                {{ form.current_password|as_crispy_field }}
+                                {{ form.new_password|as_crispy_field }}
+                                {{ form.confirm_password|as_crispy_field }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Data Management Section -->
+                    <div id="data" class="mb-4">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="section-title card-title mb-4">Data Management</h5>
+                                <a href="{% url 'export-entries' %}" class="btn btn-primary">
+                                    <i class="fas fa-download me-2"></i>Export Entries
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Save Button -->
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const sectionTitles = {
+        'profile': 'Profile Settings',
+        'appearance': 'Appearance Settings',
+        'security': 'Security Settings',
+        'data': 'Data Management'
+    };
+
+    const mainTitle = document.getElementById('mainTitle');
+    const navItems = document.querySelectorAll('.list-group-item');
+    const sections = document.querySelectorAll('.content > form > div[id]');
+    const sectionTitles = document.querySelectorAll('.section-title');
+
+    function updateTitle(sectionId, title) {
+        // Update main title
+        mainTitle.textContent = title;
+
+        // Reset all section titles
+        sectionTitles.forEach(title => {
+            title.classList.remove('active');
+        });
+
+        // Activate current section title
+        const currentSection = document.querySelector(`#${sectionId} .section-title`);
+        if (currentSection) {
+            currentSection.classList.add('active');
+        }
+    }
+
+    // Update active section based on scroll position
+    window.addEventListener('scroll', function() {
+        let current = '';
+        
+        sections.forEach(section => {
+            const sectionTop = section.offsetTop;
+            if (pageYOffset >= sectionTop - 200) {
+                current = section.getAttribute('id');
+            }
+        });
+        
+        if (current) {
+            navItems.forEach(item => {
+                item.classList.remove('active');
+                if (item.getAttribute('href').slice(1) === current) {
+                    item.classList.add('active');
+                    updateTitle(current, sectionTitles[current]);
+                }
+            });
+        }
+    });
+
+    // Handle click events
+    document.querySelectorAll('.list-group-item').forEach(anchor => {
+        anchor.addEventListener('click', function(e) {
+            e.preventDefault();
+            const targetId = this.getAttribute('href').slice(1);
+            const target = document.getElementById(targetId);
+            
+            window.scrollTo({
+                top: target.offsetTop - 100,
+                behavior: 'smooth'
+            });
+            
+            // Update active states
+            navItems.forEach(item => item.classList.remove('active'));
+            this.classList.add('active');
+            updateTitle(targetId, sectionTitles[targetId]);
+        });
+    });
+
+    // Set initial active section
+    const initialSection = window.location.hash.slice(1) || 'profile';
+    updateTitle(initialSection, sectionTitles[initialSection]);
+});
+</script>
+{% endblock %}

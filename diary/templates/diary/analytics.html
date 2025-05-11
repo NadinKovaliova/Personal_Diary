@@ -1,0 +1,232 @@
+{% extends "diary/layout.html" %}
+{% block title %}Analytics & Insights{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    .stat-card {
+        transition: transform 0.2s;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+    }
+
+    .chart-container {
+        position: relative;
+        height: 300px;
+        margin-bottom: 2rem;
+    }
+
+    .insight-card {
+        background-color: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-left: 4px solid var(--primary);
+    }
+
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: var(--primary);
+    }
+
+    .stat-label {
+        color: var(--text-muted);
+        font-size: 0.875rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="h3 mb-4">Analytics & Insights</h1>
+
+    <!-- Statistics Summary -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-number">{{ total_entries }}</div>
+                    <div class="stat-label">Total Entries</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-number">{{ current_streak }}</div>
+                    <div class="stat-label">Day Writing Streak</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-number">{{ avg_words }}</div>
+                    <div class="stat-label">Avg. Words per Entry</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-number">{{ entries_this_month }}</div>
+                    <div class="stat-label">Entries This Month</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row mb-4">
+        <!-- Mood Trends -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Mood Trends</h5>
+                    <div class="chart-container">
+                        <canvas id="moodChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Writing Activity -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Writing Activity</h5>
+                    <div class="chart-container">
+                        <canvas id="activityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tag Analysis -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Most Used Tags</h5>
+            <div class="chart-container">
+                <canvas id="tagChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Insights -->
+    <div class="card insight-card">
+        <div class="card-body">
+            <h5 class="card-title">
+                <i class="fas fa-lightbulb text-primary me-2"></i>Insights
+            </h5>
+            <ul class="list-unstyled">
+                {% for insight in insights %}
+                    <li class="mb-2">{{ insight }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Mood Trends Chart
+    const moodCtx = document.getElementById('moodChart').getContext('2d');
+    const moodEmojis = {{ mood_emojis|safe }};
+    
+    new Chart(moodCtx, {
+        type: 'line',
+        data: {
+            labels: {{ mood_dates|safe }},
+            datasets: [{
+                label: 'Mood',
+                data: {{ mood_data|safe }},
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    min: -2,
+                    max: 2,
+                    ticks: {
+                        callback: function(value) {
+                            switch (value) {
+                                case 2: return '🤩';
+                                case 1: return '😊';
+                                case 0: return '😐';
+                                case -1: return '😔';
+                                case -2: return '😢';
+                                default: return '';
+                            }
+                        }
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Mood: ${moodEmojis[context.dataIndex]}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Writing Activity Chart
+    const activityCtx = document.getElementById('activityChart').getContext('2d');
+    new Chart(activityCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ activity_hours|safe }},
+            datasets: [{
+                label: 'Entries Written',
+                data: {{ activity_data|safe }},
+                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                borderColor: 'rgb(54, 162, 235)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    // Tag Usage Chart
+    const tagCtx = document.getElementById('tagChart').getContext('2d');
+    new Chart(tagCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ tag_labels|safe }},
+            datasets: [{
+                data: {{ tag_data|safe }},
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.5)',
+                    'rgba(54, 162, 235, 0.5)',
+                    'rgba(255, 206, 86, 0.5)',
+                    'rgba(75, 192, 192, 0.5)',
+                    'rgba(153, 102, 255, 0.5)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+</script>
+{% endblock %}

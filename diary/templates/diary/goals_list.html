@@ -1,0 +1,265 @@
+{% extends "diary/layout.html" %}
+{% block title %}My Goals{% endblock %}
+
+
+{% block content %}
+<div class="container py-4">
+    <div class="goals-container">
+        <h1 class="h5 mb-4">My Goals</h1>
+
+        <!-- Active Goals -->
+        {% for goal in goals %}
+            {% if not goal.completed %}
+            <div class="goal-card">
+                <div class="d-flex">
+                    <input type="checkbox" class="form-check-input me-3"
+                        {% if goal.completed %}checked{% endif %}
+                        onchange="toggleGoalCompleted({{ goal.id }})">
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between">
+                            <div class="goal-title">{{ goal.title }}</div>
+                            <button class="btn btn-link text-danger p-0" onclick="deleteGoal({{ goal.id }})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        {% if goal.description or goal.deadline %}
+                        <div class="goal-meta mt-1">
+                            {% if goal.description %}
+                            <div>{{ goal.description }}</div>
+                            {% endif %}
+                            {% if goal.deadline %}
+                            <div {% if goal.is_overdue %} class="overdue" {% endif %}>Due {{ goal.deadline|date:"M j, Y" }}</div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        {% if goal.subtasks %}
+                        <div class="subtasks-list mt-2">
+                            {% for subtask in goal.subtasks %}
+                            <div class="subtask-item">
+                                <input type="checkbox" class="form-check-input me-2"
+                                    {% if subtask.completed %}checked{% endif %}
+                                    onchange="toggleSubtask({{ goal.id }}, {{ forloop.counter0 }})">
+                                <span>{{ subtask.title }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+        
+        <!-- Quick Add Section -->
+        <div class="quick-add-section">
+            <form id="quickAddForm" onsubmit="handleQuickAdd(event)">
+                {% csrf_token %}
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" class="form-check-input" id="quickAddCompleted">
+                    <input type="text" class="quick-add-input" placeholder="Add a goal"
+                       id="quickAddTitle" required onfocus="showDetails()">
+                </div>
+
+                <div id="detailsSection" class="details-section">
+                    
+                    
+                    <div class="mb-3">
+                        <textarea class="form-control" id="quickAddDescription" 
+                                placeholder="Description" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <input type="date" class="form-control" id="quickAddDeadline">
+                    </div>
+                    
+                    <div id="subtasksList"></div>
+                    
+                    <button type="button" class="btn btn-link mb-3" onclick="addSubtaskField()">
+                        <i class="fas fa-plus"></i> Add subtask
+                    </button>
+                    
+                    <div class="d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-link" onclick="cancelQuickAdd()">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            Add Goal
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Completed Goals (Collapsible) -->
+        <div class="mt-4">
+            <button class="btn btn-link w-100 text-start d-flex align-items-center" 
+                    type="button" 
+                    data-bs-toggle="collapse" 
+                    data-bs-target="#completedGoals">
+                <i class="fas fa-chevron-right me-2"></i>
+                Completed Goals
+            </button>
+            <div class="collapse" id="completedGoals">
+                {% for goal in goals %}
+                    {% if goal.completed %}
+                    <div class="goal-card completed">
+                        <div class="d-flex">
+                            <input type="checkbox" class="form-check-input me-3" checked
+                                   onchange="toggleGoalCompleted({{ goal.id }})">
+                            <div class="flex-grow-1">
+                                <div class="d-flex justify-content-between">
+                                    <div class="goal-title text-muted">{{ goal.title }}</div>
+                                    <button class="btn btn-link text-danger p-0" onclick="deleteGoal({{ goal.id }})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function showDetails() {
+    const detailsSection = document.getElementById('detailsSection');
+    detailsSection.style.display = 'block';
+    // Add visible class after a small delay to trigger animation
+    setTimeout(() => {
+        detailsSection.classList.add('visible');
+    }, 10);
+}
+
+function cancelQuickAdd() {
+    const detailsSection = document.getElementById('detailsSection');
+    detailsSection.classList.remove('visible');
+    setTimeout(() => {
+        document.getElementById('quickAddForm').reset();
+        detailsSection.style.display = 'none';
+        document.getElementById('subtasksList').innerHTML = '';
+    }, 300);
+}
+
+function addSubtaskField() {
+    const subtasksList = document.getElementById('subtasksList');
+    const subtaskId = Date.now();
+    
+    const subtaskHtml = `
+        <div class="input-group mb-2" id="subtask-${subtaskId}">
+            <input type="text" class="form-control" placeholder="Subtask"
+                   name="subtasks[]">
+            <button type="button" class="btn btn-outline-secondary"
+                    onclick="removeSubtaskField(${subtaskId})">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>`;
+    
+    subtasksList.insertAdjacentHTML('beforeend', subtaskHtml);
+}
+
+function removeSubtaskField(id) {
+    document.getElementById(`subtask-${id}`).remove();
+}
+
+function handleQuickAdd(event) {
+    event.preventDefault();
+    
+    const title = document.getElementById('quickAddTitle').value.trim();
+    const description = document.getElementById('quickAddDescription').value.trim();
+    const deadline = document.getElementById('quickAddDeadline').value;
+    const completed = document.getElementById('quickAddCompleted').checked;
+    const subtaskInputs = document.querySelectorAll('[name="subtasks[]"]');
+    const subtasks = Array.from(subtaskInputs)
+        .map(input => input.value.trim())
+        .filter(value => value);
+    
+    if (title) {
+        fetch('{% url "goal-create" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                title,
+                description,
+                deadline,
+                completed,
+                subtasks
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            }
+        });
+    }
+}
+
+function toggleGoalCompleted(goalId) {
+    fetch(`/goals/${goalId}/toggle/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        }
+    });
+}
+
+function toggleSubtask(goalId, index) {
+    fetch(`/goals/${goalId}/subtask/${index}/toggle/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        }
+    });
+}
+
+function deleteGoal(goalId) {
+    if (confirm('Are you sure you want to delete this goal?')) {
+        fetch(`/goals/${goalId}/delete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            }
+        });
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Add animation for collapse arrow
+    const completedSection = document.getElementById('completedGoals');
+    completedSection.addEventListener('show.bs.collapse', function() {
+        this.previousElementSibling.classList.add('expanded');
+    });
+    completedSection.addEventListener('hide.bs.collapse', function() {
+        this.previousElementSibling.classList.remove('expanded');
+    });
+});
+</script>
+{% endblock %}

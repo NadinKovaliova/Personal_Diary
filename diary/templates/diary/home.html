@@ -1,0 +1,47 @@
+{% extends "diary/layout.html" %}
+{% block title %}Welcome{% endblock %}
+
+{% block content %}
+<div class="row align-items-center min-vh-75">
+    <div class="col-md-6">
+        <h1 class="display-4">Welcome to Personal Diary</h1>
+        <p class="lead">Your private space to capture thoughts, track goals, and reflect on your journey.</p>
+        <hr class="my-4">
+        <p>Start journaling today and discover insights about yourself.</p>
+        <div class="d-flex gap-2">
+            <a class="btn btn-primary btn-lg" href="{% url 'register' %}" role="button">Get Started</a>
+            <a class="btn btn-outline-primary btn-lg" href="{% url 'login' %}" role="button">Sign In</a>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card-group">
+            <div class="card m-2">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-book"></i> Daily Entries</h5>
+                    <p class="card-text">Write and organize your thoughts.</p>
+                </div>
+            </div>
+            <div class="card m-2">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-chart-line"></i> Analytics</h5>
+                    <p class="card-text">Track your writing habits.</p>
+                </div>
+            </div>
+        </div>
+        <div class="card-group">
+            <div class="card m-2">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-tasks"></i> Goal Tracking</h5>
+                    <p class="card-text">Set and achieve your goals.</p>
+                </div>
+            </div>
+            <div class="card m-2">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-envelope"></i> Future Letters</h5>
+                    <p class="card-text">Write to your future self.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,257 @@
+{% extends "diary/layout.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block extra_head %}
+<style>
+    .stat-mini {
+        text-align: center;
+        padding: 1rem;
+        background-color: var(--light);
+        border-radius: 8px;
+    }
+
+    .stat-mini .stat-number {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: var(--primary);
+    }
+
+    .stat-mini .stat-label {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+    }
+
+    .insight-preview {
+        padding: 1rem;
+        background-color: var(--light);
+        border-radius: 8px;
+        border-left: 4px solid var(--warning);
+    }
+
+    [data-bs-theme="dark"] .stat-mini,
+    [data-bs-theme="dark"] .insight-preview {
+        background-color: var(--dark);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Welcome Section -->
+
+    <div class="row mb-4">
+        <div class="col">
+            <h1>{{ user.username }}'s diary</h1>
+            <p class="text-muted">{{ now|date:"l, F j, Y" }}</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'entry-create' %}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> New Entry
+            </a>
+        </div>
+    </div>
+   
+
+    <!-- Daily Mood Section -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h6>How are you feeling today?</h6>
+            <div class="emoji-picker-container">
+                <div class="d-flex gap-3 flex-wrap emoji-container">
+                    {% csrf_token %}
+                    {% for emoji in emoji_suggestions %}
+                        <span class="emoji-option fs-4 {% if today_mood and emoji == today_mood.mood %}selected{% endif %}" 
+                              role="button" 
+                              data-emoji="{{ emoji }}">{{ emoji }}</span>
+                    {% endfor %}
+                </div>
+                <input type="hidden" name="emoji" id="selected-emoji" 
+                       value="{{ today_mood.mood|default:'' }}">
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Recent Entries Section -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Recent Entries</h5>
+                    <a href="{% url 'entries-list' %}" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body">
+                    {% if recent_entries %}
+                        {% for entry in recent_entries %}
+                            <a href="{% url 'entry-detail' pk=entry.pk %}" class="text-decoration-none">
+                                <div class="entry-preview mb-3" data-date="{{ entry.created_at|date:'Y-m-d' }}">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="mb-0">{{ entry.created_at|date:"F j, Y" }}</h6>
+                                        {% if entry.emoji_of_day %}
+                                            <span class="entry-emoji fs-5">{{ entry.emoji_of_day }}</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="entry-content text-muted">
+                                        {{ entry.content|striptags|truncatechars:150 }}
+                                        {% if entry.content|length > 150 %}
+                                            <a href="{% url 'entry-detail' pk=entry.pk %}" class="text-primary ms-1">Read more</a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </a>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-center text-muted">No entries yet</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Goals Section -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Active Goals</h5>
+                    <a href="{% url 'goals' %}" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body">
+                    {% if active_goals %}
+                        {% for goal in active_goals %}
+                            <div class="goal-preview mb-3">
+                                <h6>{{ goal.title }}</h6>
+                                <div class="progress">
+                                    <div class="progress-bar" role="progressbar" 
+                                         style="width: {{ goal.progress }}%"
+                                         aria-valuenow="{{ goal.progress }}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100">
+                                        {{ goal.progress }}%
+                                    </div>
+                                </div>
+                                <small class="text-muted">Due: {{ goal.deadline|date:"M j, Y" }}</small>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-center text-muted">No active goals</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Wishlist Section -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Wishlist</h5>
+                    <a href="{% url 'wishlist' %}" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body">
+                    {% if wishlist_items %}
+                        {% for item in wishlist_items %}
+                            <div class="wishlist-item mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <h6>{{ item.title }}</h6>
+                                    {% if item.price %}
+                                        <span>${{ item.price }}</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-center text-muted">Your wishlist is empty</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Section -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Analytics Overview</h5>
+                    <a href="{% url 'analytics' %}" class="btn btn-sm btn-outline-primary">Full Analytics</a>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="stat-mini">
+                                <div class="stat-number">{{ current_streak }}</div>
+                                <div class="stat-label">Day Streak</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-mini">
+                                <div class="stat-number">{{ entries_this_month }}</div>
+                                <div class="stat-label">Entries This Month</div>
+                            </div>
+                        </div>
+                        {% if latest_insight %}
+                        <div class="col-12">
+                            <div class="insight-preview">
+                                <i class="fas fa-lightbulb text-warning me-2"></i>
+                                {{ latest_insight }}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const selectedEmojiInput = document.getElementById('selected-emoji');
+    let currentMood = selectedEmojiInput.value;
+
+    // Handle emoji selection - only one emoji at a time
+    document.querySelectorAll('.emoji-option').forEach(emoji => {
+        emoji.addEventListener('click', () => {
+            const emojiValue = emoji.dataset.emoji;
+            
+            // Remove selected class from all emojis
+            document.querySelectorAll('.emoji-option').forEach(e => {
+                e.classList.remove('selected');
+            });
+            
+            // If clicking the same emoji, deselect it
+            if (currentMood === emojiValue) {
+                currentMood = '';
+                selectedEmojiInput.value = '';
+            } else {
+                // Select the new emoji
+                emoji.classList.add('selected');
+                currentMood = emojiValue;
+                selectedEmojiInput.value = emojiValue;
+            }
+            
+            // Send daily mood to backend
+            fetch('{% url "update-mood" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    mood: currentMood,
+                    date: new Date().toISOString().split('T')[0]
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update any diary entries for today if they exist
+                    const todayEntries = document.querySelectorAll('.entry-preview[data-date="' + data.date + '"]');
+                    todayEntries.forEach(entry => {
+                        const emojiSpan = entry.querySelector('.entry-emoji');
+                        if (emojiSpan) {
+                            emojiSpan.textContent = data.mood;
+                        }
+                    });
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}
