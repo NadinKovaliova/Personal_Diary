@@ -4,41 +4,72 @@
 {% block content %}
 <div class="container py-4">
     <div class="wishlist-container">
-        <h1 class="h5 mb-4">My Wishlist</h1>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h5 mb-0">My Wishlist</h1>
+            
+            <!-- Sort Dropdown -->
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" 
+                        data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-sort"></i> Sort
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item {% if current_sort == 'custom' %}active{% endif %}" 
+                          href="?sort=custom">Custom Order</a></li>
+                    <li><a class="dropdown-item {% if current_sort == 'date_desc' %}active{% endif %}" 
+                          href="?sort=date_desc">Newest First</a></li>
+                    <li><a class="dropdown-item {% if current_sort == 'date_asc' %}active{% endif %}" 
+                          href="?sort=date_asc">Oldest First</a></li>
+                    <li><a class="dropdown-item {% if current_sort == 'price_desc' %}active{% endif %}" 
+                          href="?sort=price_desc">Price (Highest)</a></li>
+                    <li><a class="dropdown-item {% if current_sort == 'price_asc' %}active{% endif %}" 
+                          href="?sort=price_asc">Price (Lowest)</a></li>
+                    <li><a class="dropdown-item {% if current_sort == 'priority_desc' %}active{% endif %}" 
+                          href="?sort=priority_desc">Priority (Lowest)</a></li>
+                    <li><a class="dropdown-item {% if current_sort == 'priority_asc' %}active{% endif %}" 
+                          href="?sort=priority_asc">Priority (Highest)</a></li>
+                </ul>
+            </div>
+        </div>
 
         <!-- Active Items -->
-        {% for item in wishlist_items %}
-            {% if not item.purchased %}
-            <div class="wishlist-card">
-                <div class="d-flex">
-                    <input type="checkbox" class="form-check-input me-3"
-                        {% if item.purchased %}checked{% endif %}
-                        onchange="toggleItemPurchased({{ item.id }})">
-                    <div class="flex-grow-1">
-                        <div class="d-flex justify-content-between">
-                            <div class="item-title">{{ item.title }}</div>
-                            <button class="btn btn-link text-danger p-0" onclick="deleteItem({{ item.id }})">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                        {% if item.description or item.price or item.priority%}
-                        <div class="item-meta mt-1">
-                            {% if item.description %}
-                            <div>{{ item.description }}</div>
-                            {% endif %}
-                            {% if item.price %}
-                            <div>Price: ${{ item.price }}</div>
-                            {% endif %}
-                            {% if item.priority %}
-                            <div>Priority: {{ item.priority }}</div>
-                            {% endif %}
-                        </div>
+        <div id="wishlist-items" class="{% if current_sort == 'custom' %}sortable{% endif %}">
+            {% for item in wishlist_items %}
+                {% if not item.purchased %}
+                <div class="wishlist-card" data-id="{{ item.id }}">
+                    <div class="d-flex">
+                        {% if current_sort == 'custom' %}
+                        <div class="drag-handle me-2"><i class="fas fa-grip-vertical"></i></div>
                         {% endif %}
+                        <input type="checkbox" class="form-check-input me-3"
+                               {% if item.purchased %}checked{% endif %}
+                               onchange="toggleItemPurchased({{ item.id }})">
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between">
+                                <div class="item-title">{{ item.title }}</div>
+                                <button class="btn btn-link text-danger p-0" onclick="deleteItem({{ item.id }})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                            {% if item.description or item.price or item.priority %}
+                            <div class="item-meta mt-1">
+                                {% if item.description %}
+                                <div>{{ item.description }}</div>
+                                {% endif %}
+                                {% if item.price %}
+                                <div>Price: ${{ item.price }}</div>
+                                {% endif %}
+                                {% if item.priority %}
+                                <div>Priority: {{ item.priority }}</div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
-            </div>
-            {% endif %}
-        {% endfor %}
+                {% endif %}
+            {% endfor %}
+        </div>
         
         <!-- Quick Add Form -->
         <div class="quick-add-section">
@@ -202,6 +233,32 @@ document.addEventListener('DOMContentLoaded', function() {
     purchasedSection.addEventListener('hide.bs.collapse', function() {
         this.previousElementSibling.classList.remove('expanded');
     });
+});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize drag and drop if in custom sort mode
+    if (document.querySelector('.sortable')) {
+        const wishlistItems = document.getElementById('wishlist-items');
+        Sortable.create(wishlistItems, {
+            animation: 150,
+            handle: '.drag-handle',
+            onEnd: function() {
+                const items = Array.from(wishlistItems.children)
+                    .map(card => card.dataset.id);
+                
+                fetch('{% url "reorder-wishlist" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify({ items: items })
+                });
+            }
+        });
+    }
 });
 </script>
 {% endblock %}

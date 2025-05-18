@@ -109,7 +109,8 @@ class Goal(models.Model):
     completed = models.BooleanField(default=False)
     subtasks = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
-
+    order = models.IntegerField(default=0)
+    
     def update_progress(self):
         if not self.subtasks:
             self.progress = 100 if self.completed else 0

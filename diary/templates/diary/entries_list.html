@@ -3,6 +3,7 @@
 
 {% block content %}
 <div class="container py-4">
+    {% csrf_token %}
     <h1 class="h5 mb-4">
         {% if view_type == 'archive' %}
             Archive
@@ -13,6 +14,31 @@
         {% endif %}
 
     </h1>
+    <!-- Bulk Actions Bar -->
+    <div class="bulk-actions-bar mb-3" style="display: none;">
+        <div class="d-flex align-items-center gap-2">
+            <span class="selected-count me-3">0 selected</span>
+            {% if view_type == 'trash' %}
+                <button class="btn btn-outline-primary btn-sm bulk-restore">
+                    <i class="fas fa-trash-restore"></i> Restore Selected
+                </button>
+                <button class="btn btn-outline-danger btn-sm bulk-delete">
+                    <i class="fas fa-times"></i> Delete Selected
+                </button>
+            {% elif view_type == 'archive' %}
+                <button class="btn btn-outline-secondary btn-sm bulk-unarchive">
+                    <i class="fas fa-box-open"></i> Unarchive Selected
+                </button>
+            {% else %}
+                <button class="btn btn-outline-secondary btn-sm bulk-archive">
+                    <i class="fas fa-archive"></i> Archive Selected
+                </button>
+                <button class="btn btn-outline-danger btn-sm bulk-trash">
+                    <i class="fas fa-trash"></i> Move to Trash
+                </button>
+            {% endif %}
+        </div>
+    </div>
     <!-- Search and Sort Controls -->
     <div class="card mb-4">
         <div class="card-header">
@@ -33,6 +59,7 @@
                     {% if view_type %}
                     <input type="hidden" name="view_type" value="{{ view_type }}">
                     {% endif %}
+
                     
                     <!-- Search -->
                     <div class="col-md-4">
@@ -94,59 +121,70 @@
     <!-- Entries List -->
     {% if entries %}
         {% for entry in entries %}
-            <a href="{% url 'entry-detail' pk=entry.pk %}" class="text-decoration-none">
-                <div class="card mb-3 entry-card">
-                    <div class="card-body" onclick="handleCardClick(event)">
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <h5 class="card-title">{{ entry.created_at|date:"F j, Y" }}</h5>
-                            <div>
-                                {% if entry.emoji_of_day %}
-                                    <span class="fs-4">{{ entry.emoji_of_day }}</span>
-                                {% endif %}
+            <div class="card mb-3 entry-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div class="d-flex align-items-center">
+                            <div class="entry-checkbox me-3">
+                                <input type="checkbox" class="form-check-input entry-select" 
+                                       data-entry-id="{{ entry.pk }}">
                             </div>
+                            <a href="{% url 'entry-detail' pk=entry.pk %}" class="text-decoration-none">
+                                <h5 class="card-title mb-0">{{ entry.created_at|date:"F j, Y" }}</h5>
+                            </a>
                         </div>
-                        
-                        <div class="card-text mb-3">
+                        <div>
+                            {% if entry.emoji_of_day %}
+                                <span class="fs-4">{{ entry.emoji_of_day }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="card-text mb-3">
+                        <a href="{% url 'entry-detail' pk=entry.pk %}" class="text-decoration-none">
                             {{ entry.content|safe|truncatewords_html:50 }}
                             {% if entry.content|length > 300 %}
                                 <span class="text-primary">Read more...</span>
                             {% endif %}
+                        </a>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="tags">
+                            {% if entry.tags.all %}
+                                {% for tag in entry.tags.all %}
+                                    <span class="badge bg-tag">{{ tag.name }}</span>
+                                {% endfor %}
+                            {% endif %}
                         </div>
                         
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="tags">
-                                {% if entry.tags.all %}
-                                    {% for tag in entry.tags.all %}
-                                        <span class="badge bg-tag">{{ tag.name }}</span>
-                                    {% endfor %}
-                                {% endif %}
-                            </div>
-                            
-                            <div class="btn-group" role="group" onclick="event.preventDefault(); event.stopPropagation()">
-                                {% if view_type == 'trash' %}
-                                    <button class="btn btn-outline-success" onclick="restoreEntry({{ entry.pk }})">
-                                        <i class="fas fa-undo"></i> Restore
-                                    </button>
-                                {% elif view_type == 'archive' %}
-                                    <button class="btn btn-outline-success" onclick="unarchiveEntry({{ entry.pk }})">
-                                        <i class="fas fa-box-open"></i> Unarchive
-                                    </button>
-                                {% else %}
-                                    <a href="{% url 'entry-edit' pk=entry.pk %}" class="btn btn-outline-primary" onclick="event.preventDefault(); event.stopPropagation(); window.location.href=this.href;">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </a>
-                                    <button class="btn btn-outline-secondary" onclick="archiveEntry({{ entry.pk }})">
-                                        <i class="fas fa-archive"></i> Archive
-                                    </button>
-                                    <button class="btn btn-outline-danger" onclick="trashEntry({{ entry.pk }})">
-                                        <i class="fas fa-trash"></i> Delete
-                                    </button>
-                                {% endif %}
-                            </div>
+                        <div class="btn-group" role="group" onclick="event.preventDefault(); event.stopPropagation()">
+                            {% if view_type == 'trash' %}
+                                <button class="btn btn-outline-success" onclick="restoreEntry({{ entry.pk }})">
+                                    <i class="fas fa-undo"></i> Restore
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="permanentlyDeleteEntry({{ entry.pk }})">
+                                    <i class="fas fa-times"></i> Delete Permanently
+                                </button>
+                            {% elif view_type == 'archive' %}
+                                <button class="btn btn-outline-success" onclick="unarchiveEntry({{ entry.pk }})">
+                                    <i class="fas fa-box-open"></i> Unarchive
+                                </button>
+                            {% else %}
+                                <a href="{% url 'entry-edit' pk=entry.pk %}" class="btn btn-outline-primary" onclick="event.preventDefault(); event.stopPropagation(); window.location.href=this.href;">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                                <button class="btn btn-outline-secondary" onclick="archiveEntry({{ entry.pk }})">
+                                    <i class="fas fa-archive"></i> Archive
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="trashEntry({{ entry.pk }})">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
-            </a>
+            </div>
         {% endfor %}
 
         <!-- Pagination -->
@@ -433,12 +471,49 @@
         }
     }
 
+    function permanentlyDeleteEntry(entryId) {
+        if (confirm('Are you sure you want to permanently delete this entry? This action cannot be undone.')) {
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            fetch(`/entry/${entryId}/delete-permanent/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    window.location.href = '{% url "entries-trash" %}';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to delete entry permanently. Please try again.');
+            });
+        }
+    }
+
     function handleCardClick(event) {
-        // Prevent click if the target is a button or inside the button group
-        if (event.target.closest('.btn-group')) {
-            event.preventDefault();
+        // Don't navigate if clicking checkbox or buttons
+        if (event.target.closest('.entry-checkbox') || 
+            event.target.closest('.btn-group') || 
+            event.target.closest('a')) {
             return;
         }
+        
+        // Navigate to entry detail if clicking elsewhere on card
+        const entryLink = event.currentTarget.querySelector('a[href]');
+        if (entryLink) {
+            window.location.href = entryLink.href;
+        }
+        
     }
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -474,5 +549,101 @@
         searchControls.classList.add('show');
         toggleButton.setAttribute('aria-expanded', 'true');
     }
+
+
+    document.addEventListener('DOMContentLoaded', function() {
+    const bulkActionsBar = document.querySelector('.bulk-actions-bar');
+    const selectedCount = document.querySelector('.selected-count');
+    const checkboxes = document.querySelectorAll('.entry-select');
+    let selectedEntries = new Set();
+
+    // Handle checkbox changes
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function(e) {
+            const entryId = this.dataset.entryId;
+            if (this.checked) {
+                selectedEntries.add(entryId);
+            } else {
+                selectedEntries.delete(entryId);
+            }
+            updateBulkActionsBar();;
+        });
+    });
+
+    function updateBulkActionsBar() {
+        const count = selectedEntries.size;
+        selectedCount.textContent = `${count} selected`;
+        if (count > 0) {
+            bulkActionsBar.style.display = 'block';
+        } else {
+            bulkActionsBar.style.display = 'none';
+        }
+    }
+
+    // Bulk Archive
+    const bulkArchiveBtn = document.querySelector('.bulk-archive');
+    if (bulkArchiveBtn) {
+        bulkArchiveBtn.addEventListener('click', () => bulkOperation('archive'));
+    }
+
+    // Bulk Unarchive
+    const bulkUnarchiveBtn = document.querySelector('.bulk-unarchive');
+    if (bulkUnarchiveBtn) {
+        bulkUnarchiveBtn.addEventListener('click', () => bulkOperation('unarchive'));
+    }
+
+    // Bulk Restore
+    const bulkRestoreBtn = document.querySelector('.bulk-restore');
+    if (bulkRestoreBtn) {
+        bulkRestoreBtn.addEventListener('click', () => bulkOperation('restore'));
+    }
+
+    // Bulk Delete
+    const bulkDeleteBtn = document.querySelector('.bulk-delete');
+    if (bulkDeleteBtn) {
+        bulkDeleteBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to permanently delete these entries?')) {
+                bulkOperation('delete');
+            }
+        });
+    }
+
+    // Bulk Move to Trash
+    const bulkTrashBtn = document.querySelector('.bulk-trash');
+    if (bulkTrashBtn) {
+        bulkTrashBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to move these entries to trash?')) {
+                bulkOperation('trash');
+            }
+        });
+    }
+
+    function bulkOperation(operation) {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        fetch(`/entries/bulk-${operation}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                entry_ids: Array.from(selectedEntries)
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert('Operation failed. Please try again.');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Operation failed. Please try again.');
+        });
+    }
+});
 </script>
 {% endblock %}

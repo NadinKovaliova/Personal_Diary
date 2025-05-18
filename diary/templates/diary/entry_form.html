@@ -25,6 +25,19 @@
         border-color: var(--card-border);
         color: var(--text-color);
     }
+
+    .tag-delete {
+        opacity: 0.5;
+        transition: opacity 0.2s;
+    }
+
+    .tag-delete:hover {
+        opacity: 1;
+    }
+
+    .tag:hover .tag-delete {
+        opacity: 0.8;
+    }
 </style>
 {% endblock %}
 
@@ -50,13 +63,15 @@
                 <div class="emoji-picker-container">
                     <div class="d-flex gap-3 flex-wrap emoji-container">
                         {% for emoji in emoji_suggestions %}
-                            <span class="emoji-option fs-4 {% if today_mood and emoji == today_mood.mood %}selected{% endif %}" 
+                            <span class="emoji-option fs-4 
+                                {% if is_new_entry and today_mood and emoji == today_mood.mood %}selected{% endif %}
+                                {% if not is_new_entry and entry and emoji == entry.emoji_of_day %}selected{% endif %}" 
                                   role="button" 
                                   data-emoji="{{ emoji }}">{{ emoji }}</span>
                         {% endfor %}
                     </div>
                     <input type="hidden" name="emoji" id="selected-emoji" 
-                           value="{{ today_mood.mood|default:'' }}">
+                           value="{% if is_new_entry %}{{ today_mood.mood|default:'' }}{% else %}{{ entry.emoji_of_day|default:'' }}{% endif %}">
                 </div>
             </div>
         </div>
@@ -69,6 +84,7 @@
         <div class="card mt-4">
             <div class="card-body">
                 <h6>Tags</h6>
+                <!-- Add new tag input -->
                 <div class="mb-3">
                     <div class="input-group">
                         <input type="text" class="form-control" id="new-tag-input" 
@@ -81,14 +97,21 @@
                 <div class="tag-container" id="tag-container">
                     {% for tag in user_tags %}
                         <div class="tag-item" data-tag-id="{{ tag.id }}">
-                            <span class="tag" data-tag-id="{{ tag.id }}" role="button">
+                            <span class="tag {% if not is_new_entry and tag.id|stringformat:'i' in selected_tags %}selected{% endif %}" 
+                                  data-tag-id="{{ tag.id }}" 
+                                  role="button">
                                 {{ tag.name }}
+                                <button type="button" class="btn-close btn-close-sm tag-delete" 
+                                        aria-label="Delete tag"
+                                        onclick="deleteTag({{ tag.id }}, '{{ tag.name }}')"
+                                        style="font-size: 0.6em; margin-left: 5px;">
+                                </button>
                             </span>
                         </div>
                     {% endfor %}
                 </div>
-                <input type="hidden" name="tags" id="selected-tags" value="">
-                <input type="hidden" name="new_tags" id="new-tags" value="">
+                <input type="hidden" name="tags" id="selected-tags" 
+                       value="{% if not is_new_entry %}{{ selected_tags|join:',' }}{% endif %}">
             </div>
         </div>
 
@@ -200,187 +223,162 @@
     // Initialize
     updateWordCount();
 
-    // Tag management
-    const tagInput = document.getElementById('new-tag-input');
-    const addTagBtn = document.getElementById('add-tag-btn');
-
-    function addNewTag() {
-        const tagName = tagInput.value.trim();
-        
-        if (!tagName) return;
-        
-        fetch('{% url "tag-create" %}', {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: `name=${encodeURIComponent(tagName)}`
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const tagContainer = document.getElementById('tag-container');
-                const tagItem = document.createElement('div');
-                tagItem.className = 'tag-item';
-                tagItem.innerHTML = `
-                    <span class="tag selected" data-tag-id="${data.tag.id}" role="button">
-                        ${data.tag.name}
-                    </span>
-                `;
-                tagContainer.appendChild(tagItem);
-                tagInput.value = '';
-                setupTagListeners();
-                // Update selected tags to include the new tag
-                updateSelectedTags();
-            }
-        });
-    }
-
-    // Add tag on enter key press
-    tagInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault(); // Prevent form submission
-            addNewTag();
-        }
-    });
-
-    // Add tag on button click 
-    addTagBtn.addEventListener('click', addNewTag);
-
-    // Prevent form submission on enter
-    document.getElementById('entry-form').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
-            e.preventDefault();
-        }
-    });
-
-    function setupTagListeners() {
-        // Tag selection
-        document.querySelectorAll('.tag').forEach(tag => {
-            // Remove any existing click handlers
-            tag.removeEventListener('click', handleTagClick);
-            // Add new click handler
-            tag.addEventListener('click', handleTagClick);
-        });
-    }
-
-    function handleTagClick(event) {
-        const tag = event.currentTarget;
-        tag.classList.toggle('selected');
-        updateSelectedTags();
-    }
-
-    function updateSelectedTags() {
-        const selectedTags = Array.from(document.querySelectorAll('.tag.selected'))
-            .map(t => t.dataset.tagId);
-        document.getElementById('selected-tags').value = selectedTags.join(',');
-    }
-
-    // Call setupTagListeners on page load
-    setupTagListeners();
-
-    // Emoji management
-    const emojiPicker = document.querySelector('emoji-picker');
-    const addEmojiButton = document.getElementById('add-emoji-button');
-    const selectedEmojiInput = document.getElementById('selected-emoji');
-    const emojiContainer = document.querySelector('.emoji-container');
-
-    // Initialize selected emojis set with preselected mood
-    const selectedEmojis = new Set();
-    
-    // Add preselected mood if it exists
-    if (selectedEmojiInput.value) {
-        selectedEmojis.add(selectedEmojiInput.value);
-    }
-
-    // Handle emoji selection
-    document.querySelectorAll('.emoji-option').forEach(emoji => {
-        emoji.addEventListener('click', () => {
-            const emojiValue = emoji.dataset.emoji;
-            
-            // Remove selected class from all emojis
-            document.querySelectorAll('.emoji-option').forEach(e => {
-                e.classList.remove('selected');
-            });
-            
-            // Clear selected emojis set
-            selectedEmojis.clear();
-            
-            // If clicking a different emoji than currently selected
-            if (selectedEmojiInput.value !== emojiValue) {
-                selectedEmojis.add(emojiValue);
-                emoji.classList.add('selected');
-                selectedEmojiInput.value = emojiValue;
-            } else {
-                // If clicking the same emoji, deselect it
-                selectedEmojiInput.value = '';
-            }
-        });
-    });
-
-    // Initialize existing emojis
-    function initializeExistingEmojis() {
-        const savedEmojis = selectedEmojiInput.value.split('');
-        const existingOptions = new Set(
-            Array.from(document.querySelectorAll('.emoji-option'))
-                .map(opt => opt.dataset.emoji)
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize tags selection
+        const selectedTagsInput = document.getElementById('selected-tags');
+        const tagInput = document.getElementById('new-tag-input');
+        let selectedTags = new Set(
+            selectedTagsInput.value ? selectedTagsInput.value.split(',') : []
         );
-        
-        // Add custom emojis that were previously selected
-        savedEmojis.forEach(emoji => {
-            if (!existingOptions.has(emoji)) {
-                const newOption = createEmojiOption(emoji, true);
-                emojiContainer.insertBefore(newOption, addEmojiButton);
-            }
-        });
-    }
 
-    // Handle emoji option clicks
-    document.querySelectorAll('.emoji-option').forEach(emoji => {
-        emoji.addEventListener('click', () => {
-            const emojiValue = emoji.dataset.emoji;
-            if (selectedEmojis.has(emojiValue)) {
-                selectedEmojis.delete(emojiValue);
-                emoji.classList.remove('selected');
-            } else {
-                selectedEmojis.add(emojiValue);
-                emoji.classList.add('selected');
-            }
-            updateSelectedEmojis();
-        });
-    });
-
-    // Show/hide emoji picker
-    addEmojiButton.addEventListener('click', (e) => {
-        e.preventDefault();
-        const isVisible = emojiPicker.style.display === 'block';
-        emojiPicker.style.display = isVisible ? 'none' : 'block';
-    });
-
-    // Hide picker when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!emojiPicker.contains(e.target) && !addEmojiButton.contains(e.target)) {
-            emojiPicker.style.display = 'none';
+        // Tag Management Functions
+        function setupTagListeners() {
+            document.querySelectorAll('.tag').forEach(tag => {
+                const tagElement = tag;
+                const tagId = tagElement.dataset.tagId;
+                
+                // Remove old listeners first
+                tagElement.replaceWith(tagElement.cloneNode(true));
+                
+                // Get fresh reference and add new listener
+                const newTagElement = document.querySelector(`.tag[data-tag-id="${tagId}"]`);
+                newTagElement.addEventListener('click', function(e) {
+                    // Don't toggle if clicking delete button
+                    if (e.target.closest('.tag-delete')) {
+                        return;
+                    }
+                    
+                    this.classList.toggle('selected');
+                    
+                    if (this.classList.contains('selected')) {
+                        selectedTags.add(tagId);
+                    } else {
+                        selectedTags.delete(tagId);
+                    }
+                    
+                    // Update hidden input
+                    selectedTagsInput.value = Array.from(selectedTags).join(',');
+                });
+            });
         }
+
+        function addNewTag() {
+            const tagName = tagInput.value.trim();
+            
+            if (!tagName) return;
+            
+            fetch('{% url "tag-create" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `name=${encodeURIComponent(tagName)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const tagContainer = document.getElementById('tag-container');
+                    const tagItem = document.createElement('div');
+                    tagItem.className = 'tag-item';
+                    tagItem.dataset.tagId = data.tag.id;
+                    
+                    tagItem.innerHTML = `
+                        <span class="tag selected" data-tag-id="${data.tag.id}" role="button">
+                            ${data.tag.name}
+                            <button type="button" class="btn-close btn-close-sm tag-delete" 
+                                    aria-label="Delete tag"
+                                    onclick="deleteTag(${data.tag.id}, '${data.tag.name}')"
+                                    style="font-size: 0.6em; margin-left: 5px;">
+                            </button>
+                        </span>
+                    `;
+                    
+                    tagContainer.appendChild(tagItem);
+                    tagInput.value = '';
+                    
+                    // Add to selected tags
+                    selectedTags.add(data.tag.id.toString());
+                    selectedTagsInput.value = Array.from(selectedTags).join(',');
+                    
+                    // Setup listeners for new tag
+                    setupTagListeners();
+                }
+            });
+        }
+
+        // Emoji Management
+        const selectedEmojiInput = document.getElementById('selected-emoji');
+        let currentEmoji = selectedEmojiInput.value;
+
+        document.querySelectorAll('.emoji-option').forEach(emoji => {
+            emoji.addEventListener('click', () => {
+                const emojiValue = emoji.dataset.emoji;
+                
+                // Remove selected class from all emojis
+                document.querySelectorAll('.emoji-option').forEach(e => {
+                    e.classList.remove('selected');
+                });
+                
+                // If clicking the same emoji, deselect it
+                if (currentEmoji === emojiValue) {
+                    currentEmoji = '';
+                    selectedEmojiInput.value = '';
+                } else {
+                    // Select the new emoji
+                    emoji.classList.add('selected');
+                    currentEmoji = emojiValue;
+                    selectedEmojiInput.value = emojiValue;
+                }
+            });
+        });
+
+        // Delete tag functionality
+        window.deleteTag = function(tagId, tagName) {
+            if (confirm(`Are you sure you want to delete the tag "${tagName}"?`)) {
+                fetch(`/tag/${tagId}/delete/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        if (data.wasUsed) {
+                            alert('This tag is being used in entries and cannot be deleted.');
+                        } else {
+                            // Remove tag element from DOM
+                            const tagElement = document.querySelector(`.tag-item[data-tag-id="${tagId}"]`);
+                            if (tagElement) {
+                                tagElement.remove();
+                            }
+                            
+                            // Remove from selected tags
+                            selectedTags.delete(tagId.toString());
+                            selectedTagsInput.value = Array.from(selectedTags).join(',');
+                            
+                            alert(`Tag "${tagName}" has been deleted.`);
+                        }
+                    }
+                });
+            }
+        };
+
+        // Event Listeners
+        document.getElementById('add-tag-btn').addEventListener('click', addNewTag);
+        
+        // Prevent form submission on Enter in tag input
+        tagInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addNewTag();
+            }
+        });
+
+        // Initialize
+        setupTagListeners();
     });
-
-    // Handle emoji selection from picker
-    emojiPicker.addEventListener('emoji-click', event => {
-        const emoji = event.detail.unicode;
-        const newEmojiOption = createEmojiOption(emoji, true);
-        emojiContainer.insertBefore(newEmojiOption, addEmojiButton);
-        selectedEmojis.add(emoji);
-        updateSelectedEmojis();
-        emojiPicker.style.display = 'none';
-    });
-
-    // Support dark mode
-    if (document.body.classList.contains('dark-mode')) {
-        emojiPicker.setAttribute('theme', 'dark');
-    }
-
-    // Initialize custom emojis on page load
-    initializeExistingEmojis();
 </script>
 {% endblock %}

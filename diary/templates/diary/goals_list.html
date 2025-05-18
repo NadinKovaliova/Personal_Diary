@@ -5,50 +5,79 @@
 {% block content %}
 <div class="container py-4">
     <div class="goals-container">
-        <h1 class="h5 mb-4">My Goals</h1>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h5 mb-0">My Goals</h1>
+            
+            <!-- Sort Dropdown -->
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" 
+                        data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-sort"></i> Sort
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item {% if current_sort == 'custom' %}active{% endif %}" 
+                          href="?sort=custom">Custom Order</a></li>
+                    <li><a class="dropdown-item {% if current_sort == 'date_desc' %}active{% endif %}" 
+                          href="?sort=date_desc">Newest First</a></li>
+                    <li><a class="dropdown-item {% if current_sort == 'date_asc' %}active{% endif %}" 
+                          href="?sort=date_asc">Oldest First</a></li>
+                    <li><a class="dropdown-item {% if current_sort == 'deadline_asc' %}active{% endif %}" 
+                          href="?sort=deadline_asc">Deadline (Earliest)</a></li>
+                    <li><a class="dropdown-item {% if current_sort == 'deadline_desc' %}active{% endif %}" 
+                          href="?sort=deadline_desc">Deadline (Latest)</a></li>
+                </ul>
+            </div>
+        </div>
 
         <!-- Active Goals -->
-        {% for goal in goals %}
-            {% if not goal.completed %}
-            <div class="goal-card">
-                <div class="d-flex">
-                    <input type="checkbox" class="form-check-input me-3"
-                        {% if goal.completed %}checked{% endif %}
-                        onchange="toggleGoalCompleted({{ goal.id }})">
-                    <div class="flex-grow-1">
-                        <div class="d-flex justify-content-between">
-                            <div class="goal-title">{{ goal.title }}</div>
-                            <button class="btn btn-link text-danger p-0" onclick="deleteGoal({{ goal.id }})">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                        {% if goal.description or goal.deadline %}
-                        <div class="goal-meta mt-1">
-                            {% if goal.description %}
-                            <div>{{ goal.description }}</div>
-                            {% endif %}
-                            {% if goal.deadline %}
-                            <div {% if goal.is_overdue %} class="overdue" {% endif %}>Due {{ goal.deadline|date:"M j, Y" }}</div>
-                            {% endif %}
-                        </div>
+        <div id="goals-list" class="{% if current_sort == 'custom' %}sortable{% endif %}">
+            {% for goal in goals %}
+                {% if not goal.completed %}
+                <div class="goal-card" data-id="{{ goal.id }}">
+
+                    <div class="d-flex">
+                        {% if current_sort == 'custom' %}
+                        <div class="drag-handle" style="margin-right: .25em;"><i class="fas fa-grip-vertical"></i></div>
                         {% endif %}
-                        {% if goal.subtasks %}
-                        <div class="subtasks-list mt-2">
-                            {% for subtask in goal.subtasks %}
-                            <div class="subtask-item">
-                                <input type="checkbox" class="form-check-input me-2"
-                                    {% if subtask.completed %}checked{% endif %}
-                                    onchange="toggleSubtask({{ goal.id }}, {{ forloop.counter0 }})">
-                                <span>{{ subtask.title }}</span>
+                        <input type="checkbox" class="form-check-input me-3"
+                            {% if goal.completed %}checked{% endif %}
+                            onchange="toggleGoalCompleted({{ goal.id }})">
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between">
+                                <div class="goal-title">{{ goal.title }}</div>
+                                <button class="btn btn-link text-danger p-0" onclick="deleteGoal({{ goal.id }})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </div>
-                            {% endfor %}
+                            {% if goal.description or goal.deadline %}
+                            <div class="goal-meta mt-1">
+                                {% if goal.description %}
+                                <div>{{ goal.description }}</div>
+                                {% endif %}
+                                {% if goal.deadline %}
+                                <div {% if goal.is_overdue %} class="overdue" {% endif %}>Due {{ goal.deadline|date:"M j, Y" }}</div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            {% if goal.subtasks %}
+                            <div class="subtasks-list mt-2">
+                                {% for subtask in goal.subtasks %}
+                                <div class="subtask-item">
+                                    <input type="checkbox" class="form-check-input me-2"
+                                        {% if subtask.completed %}checked{% endif %}
+                                        onchange="toggleSubtask({{ goal.id }}, {{ forloop.counter0 }})">
+                                    <span>{{ subtask.title }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
                         </div>
-                        {% endif %}
                     </div>
+                    
                 </div>
-            </div>
-            {% endif %}
-        {% endfor %}
+                {% endif %}
+            {% endfor %}
+        </div>
         
         <!-- Quick Add Section -->
         <div class="quick-add-section">
@@ -127,6 +156,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
 function showDetails() {
     const detailsSection = document.getElementById('detailsSection');
@@ -260,6 +290,28 @@ document.addEventListener('DOMContentLoaded', function() {
     completedSection.addEventListener('hide.bs.collapse', function() {
         this.previousElementSibling.classList.remove('expanded');
     });
+
+    // Initialize drag and drop if in custom sort mode
+    if (document.querySelector('.sortable')) {
+        const goalsList = document.getElementById('goals-list');
+        Sortable.create(goalsList, {
+            animation: 150,
+            handle: '.drag-handle',
+            onEnd: function() {
+                const goals = Array.from(goalsList.children)
+                    .map(card => card.dataset.id);
+                
+                fetch('{% url "reorder-goals" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify({ goals: goals })
+                });
+            }
+        });
+    }
 });
 </script>
 {% endblock %}

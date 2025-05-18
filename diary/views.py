@@ -74,25 +74,18 @@ def dashboard(request):
     ).first()
 
     # Get entries
-    entries = DiaryEntry.objects.filter(user=request.user)
+    entries = DiaryEntry.objects.filter(user=request.user, status='active')
     
-    # Calculate current streak
-    dates = sorted(entries.values_list('created_at__date', flat=True), reverse=True)
-    current_streak = 0
-    
-    if dates:
-        current_date = timezone.now().date()
-        for date in dates:
-            if date == current_date or date == current_date - timedelta(days=1):
-                current_streak += 1
-                current_date = date
-            else:
-                break
+    # Calculate streaks
+    dates = sorted(entries.values_list('created_at__date', flat=True))
+    current_streak, max_streak = calculate_streak(dates)
 
     # Get latest insight
     latest_insight = None
     if current_streak >= 3:
         latest_insight = f"You're on a {current_streak}-day writing streak! 🔥"
+    elif max_streak > current_streak:
+        latest_insight = f"Your best streak was {max_streak} days! Can you beat it? ✨"
     elif entries.count() > 0:
         latest_insight = "Keep writing to build your streak! ✍️"
 
@@ -105,6 +98,7 @@ def dashboard(request):
         'today_mood': today_mood,
         'dark_mode': request.user.profile.dark_mode,
         'current_streak': current_streak,
+        'max_streak': max_streak,
         'entries_this_month': entries.filter(created_at__month=timezone.now().month).count(),
         'latest_insight': latest_insight,
         'now': timezone.now()
@@ -173,6 +167,7 @@ def entry_create(request):
         'user_tags': Tag.objects.filter(user=request.user),
         'dark_mode': request.user.profile.dark_mode,
         'today_mood': today_mood,  # Add today's mood to context
+        'is_new_entry': True  # Add this flag
     }
     return render(request, 'diary/entry_form.html', context)
 
@@ -196,8 +191,8 @@ def entry_edit(request, pk):
         entry.emoji_of_day = request.POST.get('emoji')
         tag_ids = request.POST.get('tags').split(',') if request.POST.get('tags') else []
         
-        # Update entry tags
-        entry.tags.clear()  # Remove existing tags
+        # Clear existing tags and add new ones
+        entry.tags.clear()
         if tag_ids:
             entry.tags.add(*Tag.objects.filter(id__in=tag_ids, user=request.user))
             
@@ -206,9 +201,12 @@ def entry_edit(request, pk):
     
     context = {
         'entry': entry,
-        'emoji_suggestions': ['😊', '😔', '😌', '🤔', '😎', '🥳', '😤', '🥰'],
+        'emoji_suggestions': ['🥰', '🤩', '😊', '😄', '🌟', '😌', '😎', '🙂', '😏', 
+                              '🤔', '😐', '😑', '😔', '😕', '😣', '😫', '😤', '😠', '😢', '😭'],
         'user_tags': Tag.objects.filter(user=request.user),
         'dark_mode': request.user.profile.dark_mode,
+        'selected_tags': [str(tag.id) for tag in entry.tags.all()],
+        'is_new_entry': False 
     }
     return render(request, 'diary/entry_form.html', context)
 
@@ -283,10 +281,30 @@ def tag_create(request):
 @login_required
 @require_POST
 def tag_delete(request, tag_id):
-    tag = get_object_or_404(Tag, id=tag_id, user=request.user)
-    tag.delete()
-    return JsonResponse({'success': True})
-
+    try:
+        tag = get_object_or_404(Tag, id=tag_id, user=request.user)
+        
+        # Check if tag is used in any entries
+        entry_count = tag.diaryentry_set.count()
+        
+        if entry_count > 0:
+            # Remove tag from all entries but keep the entries
+            tag.diaryentry_set.clear()
+        
+        # Delete the tag itself
+        tag.delete()
+        
+        messages.success(request, f'Tag "{tag.name}" has been deleted.')
+        return JsonResponse({
+            'success': True,
+            'wasUsed': entry_count > 0
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False, 
+            'error': str(e)
+        }, status=500)
 
 @require_POST
 @login_required
@@ -541,6 +559,17 @@ def entry_unarchive(request, pk):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 @login_required
+@require_POST
+def entry_permanent_delete(request, pk):
+    try:
+        entry = get_object_or_404(DiaryEntry, pk=pk, user=request.user, status='trash')
+        entry.delete()
+        messages.success(request, 'Entry permanently deleted.')
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@login_required
 def logout_view(request):
     """Handle logout for both GET and POST requests"""
     auth_logout(request)
@@ -549,12 +578,10 @@ def logout_view(request):
 
 @login_required
 def goals_list(request):
-    goals = Goal.objects.filter(user=request.user).order_by(
-        'completed',
-        models.F('deadline').asc(nulls_first=True),
-        '-created_at'
-    )
+    goals = Goal.objects.filter(user=request.user)
     
+    sort = request.GET.get('sort', 'custom')
+
     overdue_goals = goals.filter(
         completed=False,
         deadline__lt=timezone.now().date()
@@ -562,11 +589,41 @@ def goals_list(request):
     
     if overdue_goals.exists():
         messages.warning(request, f'You have {overdue_goals.count()} overdue goals!')
+
+    if sort == 'date_asc':
+        goals = goals.order_by('created_at')
+    elif sort == 'date_desc':
+        goals = goals.order_by('-created_at')
+    elif sort == 'deadline_asc':
+        goals = goals.order_by(models.F('deadline').asc(nulls_last=True))
+    elif sort == 'deadline_desc':
+        goals = goals.order_by(models.F('deadline').desc(nulls_last=True))
+    else:
+        # Default custom order
+        goals = goals.order_by('order', 'completed', '-created_at')
     
     return render(request, 'diary/goals_list.html', {
         'goals': goals,
-        'dark_mode': request.user.profile.dark_mode
+        'dark_mode': request.user.profile.dark_mode,
+        'current_sort': sort
     })
+@login_required
+@require_POST
+def reorder_goals(request):
+    try:
+        order_data = json.loads(request.body)
+        goals = order_data.get('goals', [])
+        
+        with transaction.atomic():
+            for index, goal_id in enumerate(goals):
+                Goal.objects.filter(
+                    id=goal_id, 
+                    user=request.user
+                ).update(order=index)
+                
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 @login_required
 @require_POST
@@ -640,13 +697,31 @@ def delete_goal(request, pk):
 
 @login_required
 def wishlist(request):
-    wishlist_items = WishListItem.objects.filter(
-        user=request.user
-    ).order_by('priority')
+    wishlist_items = WishListItem.objects.filter(user=request.user)
+    
+    # Get sort parameter
+    sort = request.GET.get('sort', 'custom')
+    
+    if sort == 'date_asc':
+        wishlist_items = wishlist_items.order_by('created_at')
+    elif sort == 'date_desc':
+        wishlist_items = wishlist_items.order_by('-created_at')
+    elif sort == 'price_asc':
+        wishlist_items = wishlist_items.order_by(models.F('price').asc(nulls_last=True))
+    elif sort == 'price_desc':
+        wishlist_items = wishlist_items.order_by(models.F('price').desc(nulls_last=True))
+    elif sort == 'priority_asc':
+        wishlist_items = wishlist_items.order_by(models.F('priority').asc(nulls_last=True))
+    elif sort == 'priority_desc':
+        wishlist_items = wishlist_items.order_by(models.F('priority').desc(nulls_last=True))
+    else:
+        # Default custom order
+        wishlist_items = wishlist_items.order_by('purchased', '-priority', '-created_at')
     
     context = {
         'wishlist_items': wishlist_items,
         'dark_mode': request.user.profile.dark_mode,
+        'current_sort': sort
     }
     return render(request, 'diary/wishlist.html', context)
 
@@ -704,6 +779,24 @@ def delete_wishlist_item(request, pk):
     item = get_object_or_404(WishListItem, pk=pk, user=request.user)
     item.delete()
     return JsonResponse({'success': True})
+
+@login_required
+@require_POST
+def reorder_wishlist(request):
+    try:
+        order_data = json.loads(request.body)
+        items = order_data.get('items', [])
+        
+        with transaction.atomic():
+            for index, item_id in enumerate(items):
+                WishListItem.objects.filter(
+                    id=item_id, 
+                    user=request.user
+                ).update(priority=len(items) - index)
+                
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 @login_required
 def profile_settings(request):
@@ -773,18 +866,9 @@ def analytics_view(request):
     
     avg_words = round(sum(count_words(entry.content) for entry in entries) / total_entries) if total_entries > 0 else 0
     
-    # Calculate current streak
-    dates = sorted(entries.values_list('created_at__date', flat=True), reverse=True)
-    current_streak = 0
-    
-    if dates:
-        current_date = timezone.now().date()
-        for date in dates:
-            if date == current_date or date == current_date - timedelta(days=1):
-                current_streak += 1
-                current_date = date
-            else:
-                break
+    # Calculate streaks
+    dates = sorted(entries.values_list('created_at__date', flat=True))
+    current_streak, max_streak = calculate_streak(dates)
     
     # Define mood categories with emojis
     mood_categories = {
@@ -861,12 +945,15 @@ def analytics_view(request):
             insights.append("Things have been tough lately. Remember to take care of yourself 💝")
     
     # Writing consistency
-    if current_streak > 5:
-        insights.append(f"Amazing! You've been writing for {current_streak} days in a row! 🔥")
+    if current_streak > 0:
+        insights.append(f"Current writing streak: {current_streak} days 🔥")
+    if max_streak > current_streak:
+        insights.append(f"Best writing streak: {max_streak} days ⭐")
     
     context = {
         'total_entries': total_entries,
         'current_streak': current_streak,
+        'max_streak': max_streak,
         'avg_words': avg_words,
         'entries_this_month': entries_this_month,
         'mood_dates': json.dumps(mood_dates),
@@ -880,5 +967,77 @@ def analytics_view(request):
     }
     
     return render(request, 'diary/analytics.html', context)
+
+@login_required
+@require_POST
+def bulk_operation(request, operation):
+    data = json.loads(request.body)
+    entry_ids = data.get('entry_ids', [])
+    
+    if not entry_ids:
+        return JsonResponse({'success': False, 'error': 'No entries selected'})
+    
+    try:
+        entries = DiaryEntry.objects.filter(
+            user=request.user,
+            id__in=entry_ids
+        )
+        
+        if operation == 'archive':
+            entries.update(status='archived')
+            msg = f"{len(entry_ids)} entries archived successfully"
+        
+        elif operation == 'unarchive':
+            entries.update(status='active')
+            msg = f"{len(entry_ids)} entries unarchived successfully"
+        
+        elif operation == 'restore':
+            entries.update(status='active', deleted_at=None)
+            msg = f"{len(entry_ids)} entries restored successfully"
+        
+        elif operation == 'delete':
+            entries.filter(status='trash').delete()
+            msg = f"{len(entry_ids)} entries deleted permanently"
+            
+        elif operation == 'trash':  # Add this new condition
+            entries.update(status='trash', deleted_at=timezone.now())
+            msg = f"{len(entry_ids)} entries moved to trash successfully"
+        
+        messages.success(request, msg)
+        return JsonResponse({'success': True})
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+def calculate_streak(dates):
+    if not dates:
+        return 0, 0
+        
+    # Sort dates in ascending order
+    dates = sorted(dates)
+    today = timezone.now().date()
+    
+    current_streak = 1
+    max_streak = 1
+    
+    # Initialize counters
+    for i in range(1, len(dates)):
+        # Calculate difference between consecutive dates
+        date_diff = (dates[i] - dates[i-1]).days
+        
+        if date_diff == 1:
+            # Increment streak for consecutive days
+            current_streak += 1
+            # Update max streak if current is higher
+            max_streak = max(max_streak, current_streak)
+        elif date_diff > 1:
+            # Reset streak counter when there's a gap
+            current_streak = 1
+    
+    # Check if the streak is still active (includes today)
+    if dates[-1] != today:
+        current_streak = 0
+    
+    return current_streak, max_streak
 
 
