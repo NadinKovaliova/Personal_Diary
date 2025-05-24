@@ -2,6 +2,7 @@
 {% block title %}Analytics & Insights{% endblock %}
 
 {% block extra_head %}
+{{ block.super }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
     .stat-card {
@@ -34,6 +35,202 @@
         color: var(--text-muted);
         font-size: 0.875rem;
     }
+
+    /* Calendar Styles */
+    .calendar-grid {
+        width: 100%;
+        border: 1px solid var(--border-color);
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+
+    .calendar-header {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        text-align: center;
+        font-weight: bold;
+        background-color: var(--header-bg);
+        padding: 0.5rem;
+    }
+
+    .calendar-body {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+    }
+
+    .calendar-day {
+        aspect-ratio: 1;
+        border: 1px solid var(--border-color);
+        padding: 0.5rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+    }
+
+    .calendar-day .date {
+        font-size: 0.875rem;
+        position: absolute;
+        top: 0.25rem;
+        left: 0.25rem;
+    }
+
+    .calendar-day .mood {
+        font-size: 1.25rem;
+        margin-top: 0.5rem;
+    }
+
+    /* Mood Colors */
+    .mood-very-positive { background-color: rgba(0, 255, 0, 0.1); }
+    .mood-positive { background-color: rgba(0, 255, 0, 0.05); }
+    .mood-neutral { background-color: rgba(128, 128, 128, 0.05); }
+    .mood-negative { background-color: rgba(255, 0, 0, 0.05); }
+    .mood-very-negative { background-color: rgba(255, 0, 0, 0.1); }
+
+    /* Dark Mode Adjustments */
+    [data-bs-theme="dark"] .calendar-grid {
+        border-color: var(--border-color-dark);
+    }
+
+    [data-bs-theme="dark"] .calendar-day {
+        border-color: var(--border-color-dark);
+    }
+
+    /* Year Overview Styles */
+    .year-overview {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+    }
+
+    .month-block {
+        border: 1px solid var(--border-color);
+        border-radius: 0.5rem;
+        padding: 0.5rem;
+    }
+
+    .month-title {
+        font-size: 0.875rem;
+        text-align: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .month-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 1px;
+        margin-bottom: 0.5rem;
+    }
+
+    .month-day {
+        aspect-ratio: 1;
+        width: 100%;
+        font-size: 0.6rem;
+        position: relative;
+        border: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+        overflow: hidden;
+    }
+
+    .month-day.clickable {
+        cursor: pointer;
+    }
+
+    .day-content {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+    }
+
+    .day-link {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1;
+        text-decoration: none;
+    }
+
+    .month-day .date {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        font-size: 0.5rem;
+        opacity: 0.7;
+        z-index: 2;
+    }
+
+    .month-day .mood {
+        font-size: 0.75rem;
+        z-index: 2;
+    }
+
+    .month-day .entry-count {
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        font-size: 0.5rem;
+        background-color: var(--primary);
+        color: white;
+        padding: 0.125rem 0.25rem;
+        border-radius: 0.25rem;
+        z-index: 2;
+    }
+
+    .month-day.clickable:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    [data-bs-theme="dark"] .month-day.clickable:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .month-day .day-link:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+
+    [data-bs-theme="dark"] .month-day .day-link:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+
+    .empty-day {
+        background-color: var(--border-color);
+        opacity: 0.1;
+    }
+
+    .mood-stats {
+        display: flex;
+        justify-content: center;
+        gap: 0.25rem;
+        margin-top: 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    .mood-stat {
+        padding: 0.125rem 0.25rem;
+        border-radius: 0.25rem;
+        display: flex;
+        align-items: center;
+    }
+
+    
+    .mood-stat.very-positive { background-color: rgba(0, 255, 0, 0.1); }
+    .mood-stat.positive { background-color: rgba(0, 255, 0, 0.05); }
+    .mood-stat.neutral { background-color: rgba(128, 128, 128, 0.05); }
+    .mood-stat.negative { background-color: rgba(255, 0, 0, 0.05); }
+    .mood-stat.very-negative { background-color: rgba(255, 0, 0, 0.1); }
 </style>
 {% endblock %}
 
@@ -105,6 +302,7 @@
     </div>
 
     <!-- Tag Analysis -->
+    
     <div class="card mb-4">
         <div class="card-body">
             <h5 class="card-title">Most Used Tags</h5>
@@ -113,9 +311,9 @@
             </div>
         </div>
     </div>
-
+    
     <!-- Insights -->
-    <div class="card insight-card">
+    <div class="card insight-card mb-4">
         <div class="card-body">
             <h5 class="card-title">
                 <i class="fas fa-lightbulb text-primary me-2"></i>Insights
@@ -127,10 +325,46 @@
             </ul>
         </div>
     </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Year Mood Overview</h5>
+            
+            <!-- Year Selection -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <select id="yearOverviewSelect" class="form-select" style="width: auto;">
+                    {% for year in available_years %}
+                        <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>
+                            {{ year }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Year Grid -->
+            <div class="year-overview">
+                {% for month in months %}
+                <div class="month-block">
+                    <h6 class="month-title">{{ month.name }}</h6>
+                    <div class="month-grid" id="month-{{ month.number }}">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                    <div class="mood-stats" id="stats-{{ month.number }}">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    
+    
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
+{{ block.super }}
 <script>
     // Mood Trends Chart
     const moodCtx = document.getElementById('moodChart').getContext('2d');
@@ -228,5 +462,166 @@
             maintainAspectRatio: false
         }
     });
+
+    let yearMoodData = {{ year_mood_data|safe }};
+    let currentYear = {{ selected_year }};
+    let isLoading = false;
+
+    function generateYearView() {
+        console.log('Generating year view with data:', yearMoodData);
+        
+        if (!yearMoodData) {
+            console.error('No year mood data available');
+            return;
+        }
+
+        const getDaysInMonth = (year, month) => {
+            return new Date(year, month, 0).getDate();
+        };
+
+        const getFirstDayOfMonth = (year, month) => {
+            return new Date(year, month - 1, 1).getDay();
+        };
+
+        for (let month = 1; month <= 12; month++) {
+            const monthData = yearMoodData[month] || { moods: [], stats: {} };
+            const monthGrid = document.getElementById(`month-${month}`);
+            const statsContainer = document.getElementById(`stats-${month}`);
+            
+            if (!monthGrid || !statsContainer) continue;
+
+            // Clear existing content
+            monthGrid.innerHTML = '';
+            statsContainer.innerHTML = '';
+
+            // Get month details
+            const daysInMonth = getDaysInMonth(currentYear, month);
+            const firstDayOfMonth = getFirstDayOfMonth(currentYear, month);
+
+            // Add empty cells for the start of the month
+            for (let i = 0; i < firstDayOfMonth; i++) {
+                const emptyDay = document.createElement('div');
+                emptyDay.className = 'month-day empty-day';
+                monthGrid.appendChild(emptyDay);
+            }
+            
+            // Add day cells
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayDiv = document.createElement('div');
+                dayDiv.className = 'month-day';
+                
+                // Find mood data for this day
+                const dayMood = monthData.moods.find(m => m.day === day);
+                
+                if (dayMood) {
+                    // Add mood class for styling
+                    if (dayMood.mood_class) {
+                        dayDiv.classList.add(dayMood.mood_class);
+                    }
+
+                    // Check for entries associated with this day
+                    let linkUrl = '';
+                    if (dayMood.date && dayMood.entries && dayMood.entries.length > 0) { // Added check for entries length
+                        dayDiv.classList.add('clickable');
+                        if (dayMood.entries.length === 1) {
+                            // Single entry - link directly to entry detail using DiaryEntry pk
+                            linkUrl = `{% url 'entry-detail' pk=0 %}`.replace('0', dayMood.entries[0]);
+                        } else {
+                            // Multiple entries - link to filtered entries list for that date
+                            const formattedDate = dayMood.date;
+                            const nextDate = new Date(formattedDate);
+                            nextDate.setDate(nextDate.getDate() + 1);
+                            const nextDateFormatted = nextDate.toISOString().split('T')[0];
+
+                            linkUrl = `{% url 'entries-list' %}?view_type=active&search=&date_from=${formattedDate}&date_to=${nextDateFormatted}&sort=-created_at`;
+                        }
+                    }
+
+                    // Create the inner content with conditional link
+                    const content = dayMood.entries && dayMood.entries.length > 0 ? `
+                        <a href="${linkUrl}" class="day-link">
+                            <div class="day-content">
+                                <span class="date">${day}</span>
+                                ${dayMood.emoji ? `<span class="mood">${dayMood.emoji}</span>` : ''}
+                                ${dayMood.entries.length > 1 ? 
+                                    `<span class="entry-count">${dayMood.entries.length}</span>` : ''}
+                            </div>
+                        </a>
+                    ` : `
+                        <div class="day-content">
+                            <span class="date">${day}</span>
+                            ${dayMood.emoji ? `<span class="mood">${dayMood.emoji}</span>` : ''}
+                        </div>
+                    `;
+                    
+                    dayDiv.innerHTML = content;
+                } else {
+                    // Empty day cell with just the date
+                    dayDiv.innerHTML = `
+                        <div class="day-content">
+                            <span class="date">${day}</span>
+                        </div>
+                    `;
+                }
+                
+                monthGrid.appendChild(dayDiv);
+            }
+            
+            // Add mood statistics
+            if (monthData.stats) {
+                Object.entries(monthData.stats).forEach(([mood, count]) => {
+                    if (count > 0) {
+                        const statDiv = document.createElement('div');
+                        statDiv.className = `mood-stat ${mood}`;
+                        statDiv.textContent = count;
+                        statsContainer.appendChild(statDiv);
+                    }
+                });
+            }
+        }
+    }
+
+    // Updated year selection handler with better error handling
+    document.getElementById('yearOverviewSelect').addEventListener('change', function() {
+        if (isLoading) return;
+        
+        const selectedYear = this.value;
+        currentYear = parseInt(selectedYear);
+        isLoading = true;
+
+        // Add loading indicator
+        const yearOverview = document.querySelector('.year-overview');
+        yearOverview.style.opacity = '0.5';
+        
+        fetch(`/api/moods/${selectedYear}/`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data) {
+                    throw new Error('No data received');
+                }
+                yearMoodData = data;
+                generateYearView();
+            })
+            .catch(error => {
+                console.error('Error fetching mood data:', error);
+                alert('Failed to load mood data. Please try again.');
+            })
+            .finally(() => {
+                isLoading = false;
+                yearOverview.style.opacity = '1';
+            });
+    });
+
+    // Initialize year view with error handling
+    try {
+        generateYearView();
+    } catch (error) {
+        console.error('Error initializing year view:', error);
+    }
 </script>
 {% endblock %}

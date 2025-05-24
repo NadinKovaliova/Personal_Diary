@@ -17,12 +17,20 @@ import json
 from django.contrib.auth import login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth import authenticate
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Count, Avg
 from django.db.models.functions import ExtractHour
 import csv
 from django.contrib.auth.hashers import check_password
 from collections import Counter
+
+MOOD_CATEGORIES = {
+    'very_positive': ['🥰', '🤩', '😊', '😄', '🌟'],
+    'positive': ['😌', '😎', '🙂', '😏'],
+    'neutral': ['🤔', '😐', '😶', '😑'],
+    'negative': ['😔', '😕', '😣', '😫'],
+    'very_negative': ['😤', '😠', '😢', '😭', '💔']
+}
 
 def home(request):
     """Landing page view"""
@@ -870,14 +878,8 @@ def analytics_view(request):
     dates = sorted(entries.values_list('created_at__date', flat=True))
     current_streak, max_streak = calculate_streak(dates)
     
-    # Define mood categories with emojis
-    mood_categories = {
-        'very_positive': ['🥰', '🤩', '😊', '😄', '🌟'],
-        'positive': ['😌', '😎', '🙂', '😏'],
-        'neutral': ['🤔', '😐', '😶', '😑'],
-        'negative': ['😔', '😕', '😣', '😫'],
-        'very_negative': ['😤', '😠', '😢', '😭', '💔']
-    }
+    # Use the constant for mood categories
+    mood_categories = MOOD_CATEGORIES
 
     # Mood trends data
     moods = DailyMood.objects.filter(user=request.user).order_by('date')
@@ -906,6 +908,78 @@ def analytics_view(request):
         else:
             mood_data.append(0)
             mood_emojis.append('😐')
+
+    # Calendar view data
+    selected_month = request.GET.get('month', timezone.now().month)
+    selected_year = request.GET.get('year', timezone.now().year)
+    
+    # Get all moods for selected month
+    month_moods = DailyMood.objects.filter(
+        user=request.user,
+        date__year=selected_year,
+        date__month=selected_month
+    ).values('date', 'mood')
+    
+    # Create calendar data
+    calendar_data = {}
+    for mood in month_moods:
+        calendar_data[mood['date'].strftime('%Y-%m-%d')] = {
+            'emoji': mood['mood'],
+            'mood_class': get_mood_class(mood['mood'], mood_categories)
+        }
+
+    # Year mood view data
+    selected_year = request.GET.get('year', timezone.now().year)
+    year_moods = DailyMood.objects.filter(
+        user=request.user,
+        date__year=selected_year
+    ).values('date', 'mood')
+
+    # Get all entries for the year
+    year_entries = DiaryEntry.objects.filter(
+        user=request.user,
+        created_at__year=selected_year,
+        status='active'
+    ).values('created_at__date', 'id')
+
+    # Create entries dictionary by date
+    entries_by_date = {}
+    for entry in year_entries:
+        date_str = entry['created_at__date'].strftime('%Y-%m-%d')
+        if date_str not in entries_by_date:
+            entries_by_date[date_str] = []
+        entries_by_date[date_str].append(entry['id'])
+
+    # Create year mood data structure (by months)
+    year_mood_data = {}
+    for i in range(1, 13):
+        year_mood_data[i] = {
+            'moods': [],
+            'stats': {
+                'mood-very-positive': 0,
+                'mood-positive': 0,
+                'mood-neutral': 0,
+                'mood-negative': 0,
+                'mood-very-negative': 0
+            }
+        }
+    
+    for mood in year_moods:
+        month = mood['date'].month
+        date_str = mood['date'].strftime('%Y-%m-%d')
+        mood_class = get_mood_class(mood['mood'], mood_categories)
+        
+        entry_data = {
+            'day': mood['date'].day,
+            'emoji': mood['mood'],
+            'mood_class': mood_class,
+            'date': date_str,
+            'entries': entries_by_date.get(date_str, [])
+        }
+        
+        year_mood_data[month]['moods'].append(entry_data)
+        if mood_class:
+            year_mood_data[month]['stats'][mood_class] += 1
 
     # Writing activity by hour
     activity_hours = list(range(24))
@@ -964,9 +1038,74 @@ def analytics_view(request):
         'tag_labels': json.dumps(tag_labels),
         'tag_data': json.dumps(tag_data),
         'insights': insights,
+        'calendar_data': json.dumps(calendar_data),
+        'selected_month': int(selected_month),
+        'selected_year': int(selected_year),
+        'months': [
+            {'number': i, 'name': timezone.datetime(2000, i, 1).strftime('%B')} 
+            for i in range(1, 13)
+        ],
+        'year_mood_data': json.dumps(year_mood_data),
+        'selected_year': int(selected_year),
+        'available_years': sorted(set(
+            DailyMood.objects.filter(user=request.user)
+            .dates('date', 'year')
+            .values_list('date__year', flat=True)
+        ))
     }
     
     return render(request, 'diary/analytics.html', context)
+
+@login_required
+def get_year_moods(request, year):
+    year_moods = DailyMood.objects.filter(
+        user=request.user,
+        date__year=year
+    ).values('date', 'mood')
+    
+    # Use the constant for mood categories
+    mood_categories = MOOD_CATEGORIES
+    
+    # Create year mood data structure
+    year_mood_data = {}
+    for i in range(1, 13):
+        year_mood_data[i] = {
+            'moods': [],
+            'stats': {
+                'mood-very-positive': 0,
+                'mood-positive': 0,
+                'mood-neutral': 0,
+                'mood-negative': 0,
+                'mood-very-negative': 0
+            }
+        }
+    
+    for mood in year_moods:
+        month = mood['date'].month
+        mood_class = get_mood_class(mood['mood'], mood_categories)
+        year_mood_data[month]['moods'].append({
+            'day': mood['date'].day,
+            'emoji': mood['mood'],
+            'mood_class': mood_class
+        })
+        if mood_class:
+            year_mood_data[month]['stats'][mood_class] += 1
+    
+    return JsonResponse(year_mood_data)
+
+def get_mood_class(emoji, mood_categories):
+    """Helper function to determine CSS class based on mood"""
+    if any(emoji in emojis for emojis in mood_categories['very_positive']):
+        return 'mood-very-positive'
+    elif any(emoji in emojis for emojis in mood_categories['positive']):
+        return 'mood-positive'
+    elif any(emoji in emojis for emojis in mood_categories['neutral']):
+        return 'mood-neutral'
+    elif any(emoji in emojis for emojis in mood_categories['negative']):
+        return 'mood-negative'
+    elif any(emoji in emojis for emojis in mood_categories['very_negative']):
+        return 'mood-very-negative'
+    return ''
 
 @login_required
 @require_POST

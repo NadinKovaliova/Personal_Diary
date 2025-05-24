@@ -46,4 +46,5 @@ urlpatterns = [
     path('entries/bulk-trash/', views.bulk_operation, {'operation': 'trash'}, name='bulk-trash'),
     path('goals/reorder/', views.reorder_goals, name='reorder-goals'),
     path('wishlist/reorder/', views.reorder_wishlist, name='reorder-wishlist'),
+    path('api/moods/<int:year>/', views.get_year_moods, name='get-year-moods'),
 ]
