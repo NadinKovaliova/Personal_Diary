@@ -2,6 +2,9 @@
 
 A feature-rich digital journaling platform that transforms the traditional diary-keeping experience into an interactive journey of self-reflection and personal growth.
 
+### Demo video
+https://youtu.be/JhY04nikgXM
+
 ## Distinctiveness and Complexity
 
 This project demonstrates significant complexity through its integration of multiple advanced web technologies while maintaining a cohesive user experience focused on personal growth and emotional intelligence development.
