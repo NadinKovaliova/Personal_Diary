@@ -656,6 +656,27 @@ def goal_create(request):
 
 @login_required
 @require_POST
+def goal_edit(request, pk):
+    goal = get_object_or_404(Goal, pk=pk, user=request.user)
+    data = json.loads(request.body)
+    
+    try:
+        goal.title = data.get('title', goal.title)
+        goal.description = data.get('description', goal.description)
+        goal.deadline = data.get('deadline') or None
+        
+        # Update subtasks if provided
+        if 'subtasks' in data:
+            goal.subtasks = data['subtasks']
+            
+        goal.save()
+        goal.update_progress()
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+@login_required
+@require_POST
 def toggle_goal_completed(request, pk):
     goal = get_object_or_404(Goal, pk=pk, user=request.user)
     goal.completed = not goal.completed
@@ -805,7 +826,30 @@ def reorder_wishlist(request):
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
+    
+@login_required
+@require_POST
+def wishlist_edit(request, pk):
+    item = get_object_or_404(WishListItem, pk=pk, user=request.user)
+    data = json.loads(request.body)
+    
+    try:
+        item.title = data.get('title', item.title)
+        item.description = data.get('description', item.description)
+        
+        price = data.get('price')
+        if price:
+            try:
+                item.price = float(price)
+            except ValueError:
+                item.price = None
+        
+        item.priority = data.get('priority', item.priority)
+        item.save()
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+    
 @login_required
 def profile_settings(request):
     if request.method == 'POST':
@@ -860,7 +904,7 @@ def export_entries(request):
 @login_required
 def analytics_view(request):
     # Get user's entries
-    entries = DiaryEntry.objects.filter(user=request.user)
+    entries = DiaryEntry.objects.filter(user=request.user, status='active')
     
     # Basic statistics
     total_entries = entries.count()

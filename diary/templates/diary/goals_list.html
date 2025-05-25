@@ -45,9 +45,21 @@
                         <div class="flex-grow-1">
                             <div class="d-flex justify-content-between">
                                 <div class="goal-title">{{ goal.title }}</div>
-                                <button class="btn btn-link text-danger p-0" onclick="deleteGoal({{ goal.id }})">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                                <div>
+                                    <button class="btn btn-link p-0 me-2" 
+                                            onclick="editGoal(
+                                                {{ goal.id }}, 
+                                                '{{ goal.title|escapejs }}', 
+                                                '{{ goal.description|escapejs }}', 
+                                                '{{ goal.deadline|date:'Y-m-d'|default:'' }}',
+                                               {{ goal.subtasks|safe|lower }}
+                                            )">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-link text-danger p-0" onclick="deleteGoal({{ goal.id }})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
                             </div>
                             {% if goal.description or goal.deadline %}
                             <div class="goal-meta mt-1">
@@ -90,30 +102,27 @@
                 </div>
 
                 <div id="detailsSection" class="details-section">
-                    
-                    
                     <div class="mb-3">
                         <textarea class="form-control" id="quickAddDescription" 
-                                placeholder="Description" rows="2"></textarea>
+                                  placeholder="Description" rows="2"></textarea>
                     </div>
-                    
                     <div class="mb-3">
                         <input type="date" class="form-control" id="quickAddDeadline">
                     </div>
                     
-                    <div id="subtasksList"></div>
-                    
-                    <button type="button" class="btn btn-link mb-3" onclick="addSubtaskField()">
-                        <i class="fas fa-plus"></i> Add subtask
-                    </button>
+                    <!-- Subtasks Section -->
+                    <div class="mb-3">
+                        <div id="subtasksList"></div>
+                        <button type="button" class="btn btn-link" onclick="addSubtaskToList()">
+                            <i class="fas fa-plus"></i> Add Subtask
+                        </button>
+                    </div>
                     
                     <div class="d-flex justify-content-end gap-2">
                         <button type="button" class="btn btn-link" onclick="cancelQuickAdd()">
                             Cancel
                         </button>
-                        <button type="submit" class="btn btn-primary">
-                            Add Goal
-                        </button>
+                        <button type="submit" class="btn btn-primary">Add</button>
                     </div>
                 </div>
             </form>
@@ -279,6 +288,93 @@ function deleteGoal(goalId) {
             }
         });
     }
+}
+
+function editGoal(goalId, currentTitle, currentDescription, currentDeadline, currentSubtasks = []) {
+    const detailsSection = document.getElementById('detailsSection');
+    const form = document.getElementById('quickAddForm');
+    const titleInput = document.getElementById('quickAddTitle');
+    const descriptionInput = document.getElementById('quickAddDescription');
+    const deadlineInput = document.getElementById('quickAddDeadline');
+    const subtasksList = document.getElementById('subtasksList');
+    const submitButton = form.querySelector('button[type="submit"]');
+    
+    // Show form and populate fields
+    detailsSection.style.display = 'block';
+    detailsSection.classList.add('visible');
+    
+    titleInput.value = currentTitle;
+    descriptionInput.value = currentDescription || '';
+    deadlineInput.value = currentDeadline || '';
+    
+    // Clear existing subtasks
+    subtasksList.innerHTML = '';
+    
+    // Add existing subtasks
+    if (currentSubtasks && currentSubtasks.length > 0) {
+        currentSubtasks.forEach(subtask => {
+            addSubtaskToList(subtask.title, subtask.completed);
+        });
+    }
+    
+    // Change form submission handling
+    submitButton.textContent = 'Save Changes';
+    form.onsubmit = function(event) {
+        event.preventDefault();
+        
+        // Collect all subtasks
+        const subtaskInputs = document.querySelectorAll('[name="subtasks[]"]');
+        const subtasks = Array.from(subtaskInputs)
+            .map(input => ({
+                title: input.value.trim(),
+                completed: input.dataset.completed === 'true'
+            }))
+            .filter(subtask => subtask.title);
+        
+        fetch(`/goals/${goalId}/edit/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                title: titleInput.value.trim(),
+                description: descriptionInput.value.trim(),
+                deadline: deadlineInput.value,
+                subtasks: subtasks
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            }
+        });
+    };
+}
+
+function addSubtaskToList(title = '', completed = false) {
+    const subtasksList = document.getElementById('subtasksList');
+    const subtaskDiv = document.createElement('div');
+    subtaskDiv.className = 'input-group subtask-item mb-2';
+    
+    subtaskDiv.innerHTML = `
+        <div class="input-group-text">
+            <input type="checkbox" class="form-check-input" 
+                   ${completed ? 'checked' : ''} 
+                   onchange="this.nextElementSibling.dataset.completed = this.checked">
+        </div>
+        <input type="text" class="form-control" 
+               name="subtasks[]" 
+               value="${title}" 
+               data-completed="${completed.toString()}"
+               placeholder="Subtask">
+        <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    
+    subtasksList.appendChild(subtaskDiv);
 }
 
 document.addEventListener('DOMContentLoaded', function() {

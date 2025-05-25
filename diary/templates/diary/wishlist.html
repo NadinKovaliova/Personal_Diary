@@ -47,9 +47,15 @@
                         <div class="flex-grow-1">
                             <div class="d-flex justify-content-between">
                                 <div class="item-title">{{ item.title }}</div>
-                                <button class="btn btn-link text-danger p-0" onclick="deleteItem({{ item.id }})">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                                <div>
+                                    <button class="btn btn-link p-0 me-2" 
+                                            onclick="editItem({{ item.id }}, '{{ item.title|escapejs }}', '{{ item.description|escapejs }}', '{{ item.price|default:'' }}', '{{ item.priority|default:'' }}')">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-link text-danger p-0" onclick="deleteItem({{ item.id }})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
                             </div>
                             {% if item.description or item.price or item.priority %}
                             <div class="item-meta mt-1">
@@ -223,6 +229,51 @@ function deleteItem(itemId) {
             }
         });
     }
+}
+
+function editItem(itemId, currentTitle, currentDescription, currentPrice, currentPriority) {
+    const detailsSection = document.getElementById('detailsSection');
+    const form = document.getElementById('quickAddForm');
+    const titleInput = document.getElementById('quickAddTitle');
+    const descriptionInput = document.getElementById('quickAddDescription');
+    const priceInput = document.getElementById('quickAddPrice');
+    const priorityInput = document.getElementById('quickAddPriority');
+    const submitButton = form.querySelector('button[type="submit"]');
+    
+    // Show form and populate fields
+    detailsSection.style.display = 'block';
+    detailsSection.classList.add('visible');
+    
+    titleInput.value = currentTitle;
+    descriptionInput.value = currentDescription || '';
+    priceInput.value = currentPrice || '';
+    priorityInput.value = currentPriority || '';
+    
+    // Change form submission handling
+    submitButton.textContent = 'Save Changes';
+    form.onsubmit = function(event) {
+        event.preventDefault();
+        
+        fetch(`/wishlist/${itemId}/edit/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                title: titleInput.value.trim(),
+                description: descriptionInput.value.trim(),
+                price: priceInput.value,
+                priority: priorityInput.value
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            }
+        });
+    };
 }
 
 document.addEventListener('DOMContentLoaded', function() {
