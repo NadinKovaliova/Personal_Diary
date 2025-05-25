@@ -2,6 +2,13 @@
 Django==5.0.1
 djangorestframework==3.14.0
 
+# Form Handling
+django-crispy-forms==2.1  # Added for form styling
+crispy-bootstrap4==2022.1  # Bootstrap 4 template pack for crispy-forms
+
+# File Management
+django-cleanup==8.0.0  # Added for automatic file cleanup
+
 # Rich Text & HTML Processing
 bleach==6.1.0
 html5lib==1.1
