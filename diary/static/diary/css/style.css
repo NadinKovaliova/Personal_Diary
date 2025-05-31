@@ -223,6 +223,12 @@ body {
 .emoji-container {
     overflow-x: auto;
     padding: 10px 10px;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    max-height: 80px; /* Default height for desktop */
+    overflow-y: auto;
+    padding: 0.5rem;
+    transition: max-height 0.3s ease;
 }
 
 .emoji-picker-btn {
@@ -280,6 +286,39 @@ emoji-picker {
     border-color: var(--tag-selected-bg, #007bff);
     background-color: var(--tag-bg, #e9ecef);
     transform: scale(1.1);
+}
+/* Mobile styles */
+@media (max-width: 768px) {
+    .emoji-container {
+        max-height: 50px; /* Collapsed state */
+        overflow-y: hidden;
+    }
+
+    .emoji-container.expanded {
+        max-height: 500px; /* Expanded state */
+        overflow-y: auto;
+    }
+
+    .toggle-emoji-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        padding: 0.5rem;
+        color: var(--text-muted);
+        cursor: pointer;
+        border: none;
+        background: transparent;
+        font-size: 0.875rem;
+    }
+
+    .toggle-emoji-container i {
+        transition: transform 0.3s ease;
+    }
+
+    .toggle-emoji-container.expanded i {
+        transform: rotate(180deg);
+    }
 }
 
 /* Dark mode for emoji picker */
@@ -802,3 +841,5 @@ textarea.form-control {
 [data-bs-theme="dark"] .btn-close {
     filter: invert(1) grayscale(100%) brightness(200%);
 }
+
+

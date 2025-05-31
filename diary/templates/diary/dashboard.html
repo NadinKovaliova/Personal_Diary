@@ -32,6 +32,44 @@
     [data-bs-theme="dark"] .insight-preview {
         background-color: var(--dark);
     }
+
+    /* Mobile styles for emoji picker */
+    @media (max-width: 767.98px) {
+        .emoji-picker-container {
+            position: relative;
+        }
+
+        .emoji-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            max-height: 200px;
+            overflow-y: auto;
+            transition: max-height 0.3s ease;
+        }
+
+        .emoji-option {
+            cursor: pointer;
+        }
+
+        .toggle-emoji-container {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: var(--primary);
+            font-size: 0.875rem;
+        }
+
+        .toggle-emoji-container i {
+            margin-left: 0.5rem;
+        }
+
+        .expanded {
+            max-height: 500px; /* Adjust based on your design */
+        }
+    }
 </style>
 {% endblock %}
 
@@ -65,6 +103,10 @@
                               data-emoji="{{ emoji }}">{{ emoji }}</span>
                     {% endfor %}
                 </div>
+                <button class="toggle-emoji-container d-md-none">
+                    <span>Show more</span>
+                    <i class="fas fa-chevron-down ms-2"></i>
+                </button>
                 <input type="hidden" name="emoji" id="selected-emoji" 
                        value="{{ today_mood.mood|default:'' }}">
             </div>
@@ -252,6 +294,25 @@
                 }
             });
         });
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Mobile emoji container toggle
+        const toggleButton = document.querySelector('.toggle-emoji-container');
+        const emojiContainer = document.querySelector('.emoji-container');
+        
+        if (toggleButton) {
+            toggleButton.addEventListener('click', function() {
+                emojiContainer.classList.toggle('expanded');
+                toggleButton.classList.toggle('expanded');
+                
+                // Update button text
+                const buttonText = toggleButton.querySelector('span');
+                buttonText.textContent = emojiContainer.classList.contains('expanded') 
+                    ? 'Show less' 
+                    : 'Show more';
+            });
+        }
     });
 </script>
 {% endblock %}

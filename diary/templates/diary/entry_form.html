@@ -70,6 +70,11 @@
                                   data-emoji="{{ emoji }}">{{ emoji }}</span>
                         {% endfor %}
                     </div>
+                    <!-- Replace the existing toggle button -->
+                    <button type="button" class="toggle-emoji-container d-md-none">
+                        <span>Show more</span>
+                        <i class="fas fa-chevron-down ms-2"></i>
+                    </button>
                     <input type="hidden" name="emoji" id="selected-emoji" 
                            value="{% if is_new_entry %}{{ today_mood.mood|default:'' }}{% else %}{{ entry.emoji_of_day|default:'' }}{% endif %}">
                 </div>
@@ -379,6 +384,23 @@
 
         // Initialize
         setupTagListeners();
+
+        // Mobile emoji container toggle
+        const toggleButton = document.querySelector('.toggle-emoji-container');
+        const emojiContainer = document.querySelector('.emoji-container');
+        
+        if (toggleButton) {
+            toggleButton.addEventListener('click', function() {
+                emojiContainer.classList.toggle('expanded');
+                toggleButton.classList.toggle('expanded');
+                
+                // Update button text
+                const buttonText = toggleButton.querySelector('span');
+                buttonText.textContent = emojiContainer.classList.contains('expanded') 
+                    ? 'Show less' 
+                    : 'Show more';
+            });
+        }
     });
 </script>
 {% endblock %}
